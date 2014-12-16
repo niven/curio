@@ -224,8 +224,9 @@ foo* get_item( cache* c, int key ) {
 				discard->next->prev = discard->prev;
 				
 				// if we happen to free the initial entry in the free list, set a new head
+				// unless this was the last item, then set the list to NULL
 				if( c->free_list == discard ) {
-					c->free_list = discard->next;
+					c->free_list = discard->next == discard ? NULL : discard->next;
 				}
 				free( discard );
 				discard = NULL;
