@@ -279,79 +279,131 @@ void release_item( cache* c, foo* f, int key ) {
 	free( f );
 }
 
+/********************** TESTS *************************/
 
+void checks() {
 
-
-int main() {
-
-	cache store;
-	memset( &store.buckets, 0, sizeof(store.buckets) );
-	store.num_stored = 0;
-	store.free_list = NULL;
-
-	printf("Initial:\n");
-	dump( &store );
-	print_counters();
-
-	printf("==== Adding keys 1-10 ====\n");
-	for(int i=1; i<11; i++) {
-		foo* temp = (foo*)malloc( sizeof(foo) );
-		counters.foo_allocs++;
-		temp->b = i;
-		add_item( &store, temp, i );
-	}
-	dump( &store );
-	print_counters();
-
-	clear_cache( &store );
-	print_counters();
-	dump( &store );
-
-	// checks
 	assert( counters.foo_allocs == counters.foo_frees );
 	assert( counters.entry_allocs == counters.entry_frees );
 	assert( counters.free_entry_allocs == counters.free_entry_frees );
+	
+}
 
-	printf("==== Adding and releasing keys 1-10 ====\n");
+cache* new_cache() {
+	cache* store = (cache*) malloc( sizeof(cache) );
+	memset( store->buckets, 0, sizeof(store->buckets) );
+	store->num_stored = 0;
+	store->free_list = NULL;
+	return store;
+}
+
+void test_add() {
+	
+
+	cache* store = new_cache();
+	
+	printf("==== Adding keys 1-10 ====\n");
+	
 	for(int i=1; i<11; i++) {
 		foo* temp = (foo*)malloc( sizeof(foo) );
 		counters.foo_allocs++;
 		temp->b = i;
-		add_item( &store, temp, i );
-		release_item( &store, temp, i );
+		add_item( store, temp, i );
 	}
-
-	dump( &store );
-	clear_cache( &store );
+	dump( store );
 	print_counters();
 
+	clear_cache( store );
+
+	checks();
+}
+
+void test_add_release() {
+	
+	cache* store = new_cache();
+	
+	printf("==== Adding and releasing keys 1-10 ====\n");
+	
+	for(int i=1; i<11; i++) {
+		foo* temp = (foo*)malloc( sizeof(foo) );
+		counters.foo_allocs++;
+		temp->b = i;
+		add_item( store, temp, i );
+		release_item( store, temp, i );
+	}
+	dump( store );
+	print_counters();
+
+	clear_cache( store );
+
+	checks();
+	
+}
+
+void test_free_entry_reuse() {
+
+	cache* store = new_cache();
+		
 	printf("==== Adding keys 1-12 (filling the cache), releasing 1-4 ====\n");
 	for(int i=1; i<13; i++) {
 		foo* temp = (foo*)malloc( sizeof(foo) );
 		counters.foo_allocs++;
 		temp->b = i;
-		add_item( &store, temp, i );
+		add_item( store, temp, i );
 		if( i < 5 ) {
-			release_item( &store, temp, i );
+			release_item( store, temp, i );
 		}
 	}
 
-	dump( &store );
+	dump( store );
 
 	printf("==== Retrieving keys 3,4,5,6 (should take them off the free list/and increase refcount) ====\n");
 	for( int i=3; i<5; i++) {
-		foo* temp = get_item( &store, i );
+		foo* temp = get_item( store, i );
 		assert( temp != NULL );
 	}
-	dump( &store );
+	dump( store );
 
-	clear_cache( &store );
+	clear_cache( store );
 	print_counters();
+	checks();
+	
+}
 
-	// checks
-	assert( counters.foo_allocs == counters.foo_frees );
-	assert( counters.entry_allocs == counters.entry_frees );
-	assert( counters.free_entry_allocs == counters.free_entry_frees );
+void test_single_add_release_get() {
+	
+	cache* store = new_cache();
+	
+	printf("==== Add/Release/Retrieve keys 1 ====\n");
+	
+	foo* temp = (foo*)malloc( sizeof(foo) );
+	counters.foo_allocs++;
+	
+	int payload = 31415, key = 24;
+	temp->b = payload;
+	add_item( store, temp, key );
+	release_item( store, temp, key );
+	temp = NULL;
+	temp = get_item( store, key );
+	printf("temp->b = %d\n", temp->b );
+	assert( temp != NULL );
+	assert( temp->b == payload );
 
+	clear_cache( store );
+	print_counters();
+	checks();
+
+}
+
+int main() {
+
+	test_single_add_release_get();
+
+	test_add();
+
+	test_add_release();
+
+	test_free_entry_reuse();
+	
 	return 0;
 }
