@@ -160,27 +160,39 @@ void add_item( cache* c, foo* f, int key ){
 				c->free_list = fe->next;
 			}
 			// now our free list is ok again
-			printf("Can evict key %d from free list (it's in bucket %d)\n", fe->key, hash(fe->key) );
-			entry* current;
-			for(current = c->buckets[ hash(fe->key) ]; current->next->key != fe->key; current = current->next ) {
-				printf("Checking key %d (next %d)\n", current->key, current->next->key );
-				if( current->key == fe->key ) {
-					break;
+			size_t b = hash(fe->key);
+			printf("Can evict key %d from free list (it's in bucket %lu)\n", fe->key, b );
+			
+			// find and remove the entry from the bucket
+			entry* entry_to_free = NULL;
+			if( c->buckets[b]->key == fe->key ) { // it's the head item
+				printf("Removing the entry from the bucket (it was the head)\n");
+				entry_to_free = c->buckets[b];
+				c->buckets[b] = c->buckets[b]->next; // just move to the next one
+			} else {
+				entry* current;
+				for(current = c->buckets[b]; current->next->key != fe->key; current = current->next ) {
+					printf("Checking key %d (next %d)\n", current->key, current->next->key );
+					if( current->key == fe->key ) {
+						break;
+					}
+					assert( current->next != NULL ); // it has to be in this list
 				}
+				printf("Found the bucket entry: key %d (next %d)\n", current->key, current->next->key );
+				entry_to_free = current->next;
+				current->next = current->next->next; // skip over it
 			}
-			printf("Found parent of the free_entry: key %d (next %d)\n", current->key, current->next->key );
-			// free that one
-			entry* to_be_freed = current->next;
-			current->next = to_be_freed->next;
+			assert( entry_to_free != NULL );
 			
 			// free the free_entry, the foo it points to and the entry in the bucket
 			free( fe->evictable_foo );
 			counters.foo_frees++;
 			free( fe );
 			counters.entry_frees++;
-			free( to_be_freed );
-			counters.entry_frees++;
+			free( entry_to_free );
+			counters.free_entry_frees++;
 			// fall out and carry on with inserting 
+			c->num_stored--;
 		} else {
 			printf("Nothing in the free list.\n");
 			return;
@@ -214,6 +226,7 @@ foo* get_item( cache* c, int key ) {
 			
 			// either a foo, or a pointer to a free_entry
 			if( i->refcount == 0 ) {
+				printf("Reviving item %d\n", key);
 				// it's one on the free list, means we need to remove it from there
 				free_entry* discard = i->ptr.to_free_entry;
 				assert( discard != NULL );
@@ -238,6 +251,7 @@ foo* get_item( cache* c, int key ) {
 		}
 	}
 	
+	printf("Item %d was not in the cache\n", key );
 	return NULL;
 	
 }
@@ -396,7 +410,96 @@ void test_single_add_release_get() {
 
 }
 
+// evicting an item should also remove it from the bucket,
+// which is most tricky when it is the first/only item
+void test_evict_first_item_in_bucket() {
+
+	cache* store = new_cache();
+	
+	printf("==== Evicting first item in a bucket ====\n");
+	
+	// fill the cache first
+	foo* first_in_bucket;
+	for(int i=1; i<13; i++) {
+		foo* temp = (foo*)malloc( sizeof(foo) );
+		counters.foo_allocs++;
+		temp->b = i;
+		add_item( store, temp, i );
+		if( i == 11 ) {
+			first_in_bucket = temp;
+		}
+	}
+	
+	// puts it on the free list
+	release_item( store, first_in_bucket, 11 );
+	
+	// add some random new item, should evict 11
+	foo* temp = (foo*)malloc( sizeof(foo) );
+	counters.foo_allocs++;
+	temp->b = 1234;
+	add_item( store, temp , 55 );
+	dump( store );
+	
+	// retrieve should fail now
+	foo* not_here = get_item( store, 11 );
+	assert( not_here == NULL );
+	
+	dump( store );
+
+	clear_cache( store );
+	print_counters();
+	checks();
+	
+	
+}
+
+void test_evict_middle_item_in_bucket() {
+
+	cache* store = new_cache();
+	
+	printf("==== Evicting first item in a bucket ====\n");
+	
+	// fill the cache first
+	foo* middle_in_bucket;
+	for(int i=1; i<13; i++) {
+		foo* temp = (foo*)malloc( sizeof(foo) );
+		counters.foo_allocs++;
+		temp->b = i;
+		add_item( store, temp, i );
+		if( i == 7 ) {
+			middle_in_bucket = temp;
+		}
+	}
+	dump( store );
+
+	// puts it on the free list
+	release_item( store, middle_in_bucket, 7 );
+	
+	// add some random new item, should evict 7
+	foo* temp = (foo*)malloc( sizeof(foo) );
+	counters.foo_allocs++;
+	temp->b = 1234;
+	add_item( store, temp , 55 );
+	dump( store );
+	
+	// retrieve should fail now
+	foo* not_here = get_item( store, 7 );
+	assert( not_here == NULL );
+	
+	dump( store );
+
+	clear_cache( store );
+	print_counters();
+	checks();
+	
+	
+}
+
 int main() {
+
+	test_evict_middle_item_in_bucket();
+
+	test_evict_first_item_in_bucket();
 
 	test_single_add_release_get();
 
