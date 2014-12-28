@@ -3,8 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define CACHE_BUCKETS 4
-#define CACHE_MAX 12
+#define CACHE_SIZE 12
 
 typedef struct counter {
 	size_t foo_allocs;
@@ -37,7 +36,7 @@ int hash(int i) {
 	h ^= h >> 13;
 	h *= 0xc2b2ae35;
 	h ^= h >> 16;
-	return h % CACHE_BUCKETS;
+	return h % CACHE_SIZE;
 }
 
 // test item to store
@@ -67,7 +66,7 @@ typedef struct entry {
 
 
 typedef struct cache {
-	entry* buckets[CACHE_BUCKETS];
+	entry* buckets[CACHE_SIZE];
 	int num_stored;
 	free_entry* free_list;
 } cache;
@@ -75,7 +74,7 @@ typedef struct cache {
 void dump( cache* c ) {
 	
 	printf("Cache (%d items):\n", c->num_stored);
-	for(int i=0; i<CACHE_BUCKETS; i++ ) {
+	for(int i=0; i<CACHE_SIZE; i++ ) {
 		entry* current = c->buckets[i];
 		printf("bucket %d %p\n", i, current);
 		while( current != NULL ) {
@@ -100,7 +99,7 @@ void clear_cache( cache* c ) {
 	
 	printf("Clearing the cache\n");
 	// free all items in the buckets
-	for( int b=0; b<CACHE_BUCKETS; b++ ) {
+	for( int b=0; b<CACHE_SIZE; b++ ) {
 		entry* current = c->buckets[b];
 		while( current != NULL ) {
 			// only free actual foos
@@ -142,7 +141,7 @@ void clear_cache( cache* c ) {
 
 void add_item( cache* c, foo* f, int key ){
 
-	if( c->num_stored == CACHE_MAX ) {
+	if( c->num_stored == CACHE_SIZE ) {
 		printf("Cache full\n");
 		// check the free list
 		if( c->free_list != NULL ) {
@@ -238,7 +237,7 @@ foo* get_item( cache* c, int key ) {
 				
 				// if we happen to free the initial entry in the free list, set a new head
 				// unless this was the last item, then set the list to NULL
-				if( c->free_list == discard ) {
+				if( c->free_list == discard ) {	
 					c->free_list = discard->next == discard ? NULL : discard->next;
 				}
 				free( discard );
