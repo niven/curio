@@ -16,7 +16,7 @@ typedef struct counter {
 
 static counter counters;
 
-void print_counters() {
+static void print_counters() {
 	
 	printf("Foo allocs: %lu\n", counters.foo_allocs);
 	printf("Foo frees: %lu\n", counters.foo_frees);
@@ -28,9 +28,9 @@ void print_counters() {
 }
 
 // MurmurHash3 integer finalizer MOD cache buckets
-int hash(int i) {
+static size_t hash(size_t i) {
 
-	int h = i;
+	size_t h = i;
 	h ^= h >> 16;
 	h *= 0x85ebca6b;
 	h ^= h >> 13;
@@ -41,13 +41,13 @@ int hash(int i) {
 
 // test item to store
 typedef struct foo {
-	int b;
+	size_t b;
 } foo;
 
 // doubly linked list of refcount==0 entries in cache
 typedef struct free_entry {
 	foo* evictable_foo;
-	int key;
+	size_t key;
 	struct free_entry* next;
 	struct free_entry* prev;
 } free_entry;
@@ -59,26 +59,26 @@ typedef struct entry {
 		foo* to_foo;
 		free_entry* to_free_entry;
 	} ptr;
-	int key;
-	int refcount;
+	size_t key;
+	size_t refcount;
 	struct entry* next;
 } entry;
 
 
 typedef struct cache {
 	entry* buckets[CACHE_SIZE];
-	int num_stored;
+	size_t num_stored;
 	free_entry* free_list;
 } cache;
 
-void dump( cache* c ) {
+static void dump( cache* c ) {
 	
-	printf("Cache (%d items):\n", c->num_stored);
-	for(int i=0; i<CACHE_SIZE; i++ ) {
+	printf("Cache (%lu items):\n", c->num_stored);
+	for(size_t i=0; i<CACHE_SIZE; i++ ) {
 		entry* current = c->buckets[i];
-		printf("bucket %d %p\n", i, current);
+		printf("bucket %lu %p\n", i, current);
 		while( current != NULL ) {
-			printf("\tentry key=%d (foo.b = %d) refcount: %d\n", current->key, current->ptr.to_foo->b, current->refcount );
+			printf("\tentry key=%lu (foo.b = %lu) refcount: %lu\n", current->key, current->ptr.to_foo->b, current->refcount );
 			current = current->next;
 		}
 	}
@@ -87,7 +87,7 @@ void dump( cache* c ) {
 	free_entry* current = c->free_list;
 	if( current != NULL ){
 		do {
-			printf("\tfree entry: key=%d (foo.b=%d) [next=%d, prev=%d]\n", 
+			printf("\tfree entry: key=%lu (foo.b=%lu) [next=%lu, prev=%lu]\n", 
 			current->key, current->evictable_foo->b, current->next->key, current->prev->key );
 			current = current->next;	
 		} while( current != c->free_list );
@@ -95,7 +95,7 @@ void dump( cache* c ) {
 	
 }
 
-void clear_cache( cache* c ) {
+static void clear_cache( cache* c ) {
 	
 	printf("Clearing the cache\n");
 	// free all items in the buckets
@@ -104,12 +104,12 @@ void clear_cache( cache* c ) {
 		while( current != NULL ) {
 			// only free actual foos
 			if( current->refcount != 0 ) {
-				printf("\tfoo %d\n", current->ptr.to_foo->b );
+				printf("\tfoo %lu\n", current->ptr.to_foo->b );
 				free( current->ptr.to_foo );
 				counters.foo_frees++;
 			}
 			// free the entry
-			printf("\tentry %d\n", current->key );
+			printf("\tentry %lu\n", current->key );
 			entry* next = current->next;
 			free( current );
 			counters.entry_frees++;
@@ -126,7 +126,7 @@ void clear_cache( cache* c ) {
 		current->prev->next = NULL;
 	}
 	while( current != NULL ) {
-		printf("\tfree entry %d\n", current->key );
+		printf("\tfree entry %lu\n", current->key );
 		free( current->evictable_foo );
 		counters.foo_frees++;
 		free_entry* next = current->next;
@@ -139,7 +139,7 @@ void clear_cache( cache* c ) {
 	c->free_list = NULL;
 }
 
-void add_item( cache* c, foo* f, int key ){
+static void add_item( cache* c, foo* f, size_t key ){
 
 	if( c->num_stored == CACHE_SIZE ) {
 		printf("Cache full\n");
@@ -160,7 +160,7 @@ void add_item( cache* c, foo* f, int key ){
 			}
 			// now our free list is ok again
 			size_t b = hash(fe->key);
-			printf("Can evict key %d from free list (it's in bucket %lu)\n", fe->key, b );
+			printf("Can evict key %lu from free list (it's in bucket %lu)\n", fe->key, b );
 			
 			// find and remove the entry from the bucket
 			entry* entry_to_free = NULL;
@@ -171,13 +171,13 @@ void add_item( cache* c, foo* f, int key ){
 			} else {
 				entry* current;
 				for(current = c->buckets[b]; current->next->key != fe->key; current = current->next ) {
-					printf("Checking key %d (next %d)\n", current->key, current->next->key );
+					printf("Checking key %lu (next %lu)\n", current->key, current->next->key );
 					if( current->key == fe->key ) {
 						break;
 					}
 					assert( current->next != NULL ); // it has to be in this list
 				}
-				printf("Found the bucket entry: key %d (next %d)\n", current->key, current->next->key );
+				printf("Found the bucket entry: key %lu (next %lu)\n", current->key, current->next->key );
 				entry_to_free = current->next;
 				current->next = current->next->next; // skip over it
 			}
@@ -198,7 +198,7 @@ void add_item( cache* c, foo* f, int key ){
 		}
 
 	}
-	int h = hash( key );
+	size_t h = hash( key );
 	entry* bucket = c->buckets[h];
 	
 	entry* i = (entry*) malloc( sizeof(entry) );
@@ -216,16 +216,16 @@ void add_item( cache* c, foo* f, int key ){
 	c->num_stored++;
 }
 
-foo* get_item( cache* c, int key ) {
+static foo* get_item( cache* c, size_t key ) {
 	
-	int h = hash( key );
+	size_t h = hash( key );
 	for( entry* i = c->buckets[h]; i != NULL; i = i->next ) {
-		printf("Get item %d check %d:%d\n", key, h, i->key);
+		printf("Get item %lu check %lu:%lu\n", key, h, i->key);
 		if( i->key == key ) {
 			
 			// either a foo, or a pointer to a free_entry
 			if( i->refcount == 0 ) {
-				printf("Reviving item %d\n", key);
+				printf("Reviving item %lu\n", key);
 				// it's one on the free list, means we need to remove it from there
 				free_entry* discard = i->ptr.to_free_entry;
 				assert( discard != NULL );
@@ -250,16 +250,16 @@ foo* get_item( cache* c, int key ) {
 		}
 	}
 	
-	printf("Item %d was not in the cache\n", key );
+	printf("Item %lu was not in the cache\n", key );
 	return NULL;
 	
 }
 
-void release_item( cache* c, foo* f, int key ) {
+static void release_item( cache* c, foo* f, size_t key ) {
 
-	int h = hash( key );
+	size_t h = hash( key );
 	for( entry* i = c->buckets[h]; i != NULL; i = i->next ) {
-		printf("release %d, looking in bucket %d\n", key, h );
+		printf("release %lu, looking in bucket %lu\n", key, h );
 		if( i->key == key ) {
 			i->refcount--;
 			assert( i->refcount >= 0 );
@@ -288,14 +288,14 @@ void release_item( cache* c, foo* f, int key ) {
 	}
 	
 	// was not in the cache, just free it
-	printf("Item %d was not in the cache, doing a normal free()\n", key);
+	printf("Item %lu was not in the cache, doing a normal free()\n", key);
 	counters.foo_frees++;
 	free( f );
 }
 
 /********************** TESTS *************************/
 
-void checks() {
+static void checks() {
 
 	assert( counters.foo_allocs == counters.foo_frees );
 	assert( counters.entry_allocs == counters.entry_frees );
@@ -303,7 +303,7 @@ void checks() {
 	
 }
 
-cache* new_cache() {
+static cache* new_cache() {
 	cache* store = (cache*) malloc( sizeof(cache) );
 	memset( store->buckets, 0, sizeof(store->buckets) );
 	store->num_stored = 0;
@@ -311,14 +311,14 @@ cache* new_cache() {
 	return store;
 }
 
-void test_add() {
+static void test_add() {
 	
 
 	cache* store = new_cache();
 	
 	printf("==== Adding keys 1-10 ====\n");
 	
-	for(int i=1; i<11; i++) {
+	for(size_t i=1; i<11; i++) {
 		foo* temp = (foo*)malloc( sizeof(foo) );
 		counters.foo_allocs++;
 		temp->b = i;
@@ -332,13 +332,13 @@ void test_add() {
 	checks();
 }
 
-void test_add_release() {
+static void test_add_release() {
 	
 	cache* store = new_cache();
 	
 	printf("==== Adding and releasing keys 1-10 ====\n");
 	
-	for(int i=1; i<11; i++) {
+	for(size_t i=1; i<11; i++) {
 		foo* temp = (foo*)malloc( sizeof(foo) );
 		counters.foo_allocs++;
 		temp->b = i;
@@ -354,12 +354,12 @@ void test_add_release() {
 	
 }
 
-void test_free_entry_reuse() {
+static void test_free_entry_reuse() {
 
 	cache* store = new_cache();
 		
 	printf("==== Adding keys 1-12 (filling the cache), releasing 1-4 ====\n");
-	for(int i=1; i<13; i++) {
+	for(size_t i=1; i<13; i++) {
 		foo* temp = (foo*)malloc( sizeof(foo) );
 		counters.foo_allocs++;
 		temp->b = i;
@@ -372,7 +372,7 @@ void test_free_entry_reuse() {
 	dump( store );
 
 	printf("==== Retrieving keys 3,4,5,6 (should take them off the free list/and increase refcount) ====\n");
-	for( int i=3; i<5; i++) {
+	for(size_t i=3; i<5; i++) {
 		foo* temp = get_item( store, i );
 		assert( temp != NULL );
 	}
@@ -384,7 +384,7 @@ void test_free_entry_reuse() {
 	
 }
 
-void test_single_add_release_get() {
+static void test_single_add_release_get() {
 	
 	cache* store = new_cache();
 	
@@ -393,13 +393,13 @@ void test_single_add_release_get() {
 	foo* temp = (foo*)malloc( sizeof(foo) );
 	counters.foo_allocs++;
 	
-	int payload = 31415, key = 24;
+	size_t payload = 31415, key = 24;
 	temp->b = payload;
 	add_item( store, temp, key );
 	release_item( store, temp, key );
 	temp = NULL;
 	temp = get_item( store, key );
-	printf("temp->b = %d\n", temp->b );
+	printf("temp->b = %lu\n", temp->b );
 	assert( temp != NULL );
 	assert( temp->b == payload );
 
@@ -411,15 +411,15 @@ void test_single_add_release_get() {
 
 // evicting an item should also remove it from the bucket,
 // which is most tricky when it is the first/only item
-void test_evict_first_item_in_bucket() {
+static void test_evict_first_item_in_bucket() {
 
 	cache* store = new_cache();
 	
 	printf("==== Evicting first item in a bucket ====\n");
 	
 	// fill the cache first
-	foo* first_in_bucket;
-	for(int i=1; i<13; i++) {
+	foo* first_in_bucket = NULL;
+	for(size_t i=1; i<13; i++) {
 		foo* temp = (foo*)malloc( sizeof(foo) );
 		counters.foo_allocs++;
 		temp->b = i;
@@ -452,15 +452,15 @@ void test_evict_first_item_in_bucket() {
 	
 }
 
-void test_evict_middle_item_in_bucket() {
+static void test_evict_middle_item_in_bucket() {
 
 	cache* store = new_cache();
 	
 	printf("==== Evicting first item in a bucket ====\n");
 	
 	// fill the cache first
-	foo* middle_in_bucket;
-	for(int i=1; i<13; i++) {
+	foo* middle_in_bucket = NULL;
+	for(size_t i=1; i<13; i++) {
 		foo* temp = (foo*)malloc( sizeof(foo) );
 		counters.foo_allocs++;
 		temp->b = i;
