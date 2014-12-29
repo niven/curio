@@ -165,6 +165,7 @@ static void clear_cache( cache* c ) {
 
 static void add_item( cache* c, foo* f, size_t key ) {
 
+	printf("Adding item %lu\n", key);
 	if( c->num_stored == CACHE_SIZE ) {
 		printf("Cache full\n");
 		// check the free list
@@ -341,6 +342,7 @@ static void test_add() {
 		foo* temp = (foo*)malloc( sizeof(foo) );
 		counters.foo_allocs++;
 		temp->b = i;
+		temp->is_dirty = false;
 		add_item( store, temp, i );
 	}
 	dump( store );
@@ -361,6 +363,7 @@ static void test_add_release() {
 		foo* temp = (foo*)malloc( sizeof(foo) );
 		counters.foo_allocs++;
 		temp->b = i;
+		temp->is_dirty = false;
 		add_item( store, temp, i );
 		release_item( store, temp, i );
 	}
@@ -415,6 +418,7 @@ static void test_single_add_release_get() {
 	
 	size_t payload = 31415, key = 24;
 	temp->b = payload;
+	temp->is_dirty = false;
 	add_item( store, temp, key );
 	release_item( store, temp, key );
 	temp = NULL;
@@ -422,6 +426,7 @@ static void test_single_add_release_get() {
 	printf("temp->b = %lu\n", temp->b );
 	assert( temp != NULL );
 	assert( temp->b == payload );
+	assert( temp->is_dirty == false );
 
 	clear_cache( store );
 	print_counters();
@@ -443,6 +448,7 @@ static void test_evict_first_item_in_bucket() {
 		foo* temp = (foo*)malloc( sizeof(foo) );
 		counters.foo_allocs++;
 		temp->b = i;
+		temp->is_dirty = false;
 		add_item( store, temp, i );
 		if( i == 8 ) {
 			first_in_bucket = temp;
@@ -456,6 +462,7 @@ static void test_evict_first_item_in_bucket() {
 	foo* temp = (foo*)malloc( sizeof(foo) );
 	counters.foo_allocs++;
 	temp->b = 1234;
+	temp->is_dirty = false;
 	add_item( store, temp , 55 );
 	dump( store );
 	
@@ -476,14 +483,15 @@ static void test_evict_middle_item_in_bucket() {
 
 	cache* store = new_cache();
 	
-	printf("==== Evicting first item in a bucket ====\n");
+	printf("==== Evicting middle item in a bucket ====\n");
 	
 	// fill the cache first
 	foo* middle_in_bucket = NULL;
-	for(size_t i=1; i<13; i++) {
+	for(size_t i=1; i<=CACHE_SIZE; i++) {
 		foo* temp = (foo*)malloc( sizeof(foo) );
 		counters.foo_allocs++;
 		temp->b = i;
+		temp->is_dirty = false;
 		add_item( store, temp, i );
 		if( i == 7 ) {
 			middle_in_bucket = temp;
@@ -498,7 +506,9 @@ static void test_evict_middle_item_in_bucket() {
 	foo* temp = (foo*)malloc( sizeof(foo) );
 	counters.foo_allocs++;
 	temp->b = 1234;
+	temp->is_dirty = false;
 	add_item( store, temp , 55 );
+
 	dump( store );
 	
 	// retrieve should fail now
@@ -516,15 +526,15 @@ static void test_evict_middle_item_in_bucket() {
 
 int main() {
 
-	// test_evict_middle_item_in_bucket();
-	//
-	// test_evict_first_item_in_bucket();
-	//
-	// test_single_add_release_get();
-	//
-	// test_add();
+	test_evict_middle_item_in_bucket();
 
-	// test_add_release();
+	test_evict_first_item_in_bucket();
+
+	test_single_add_release_get();
+
+	test_add();
+
+	test_add_release();
 
 	test_free_entry_reuse();
 	
