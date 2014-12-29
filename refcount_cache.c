@@ -3,6 +3,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+typedef char bool;
+
+#define false 0
+#define true 1
 
 #define CACHE_MEMORY_BYTES 4096
 
@@ -32,6 +36,7 @@ static void print_counters() {
 // test item to store
 typedef struct foo {
 	size_t b;
+	bool is_dirty;
 	char padding[256];
 } foo;
 
@@ -158,7 +163,7 @@ static void clear_cache( cache* c ) {
 	c->free_list = NULL;
 }
 
-static void add_item( cache* c, foo* f, size_t key ){
+static void add_item( cache* c, foo* f, size_t key ) {
 
 	if( c->num_stored == CACHE_SIZE ) {
 		printf("Cache full\n");
@@ -315,6 +320,8 @@ static void release_item( cache* c, foo* f, size_t key ) {
 /********************** TESTS *************************/
 
 static void checks() {
+	
+	printf( "foo allocs/frees = %lu/%lu\n", counters.foo_allocs, counters.foo_frees);
 
 	assert( counters.foo_allocs == counters.foo_frees );
 	assert( counters.entry_allocs == counters.entry_frees );
@@ -371,10 +378,11 @@ static void test_free_entry_reuse() {
 	cache* store = new_cache();
 		
 	printf("==== Adding keys 1-12 (filling the cache), releasing 1-4 ====\n");
-	for(size_t i=1; i<13; i++) {
+	for(size_t i=1; i<CACHE_SIZE; i++) {
 		foo* temp = (foo*)malloc( sizeof(foo) );
 		counters.foo_allocs++;
 		temp->b = i;
+		temp->is_dirty = false;
 		add_item( store, temp, i );
 		if( i < 5 ) {
 			release_item( store, temp, i );
@@ -431,20 +439,20 @@ static void test_evict_first_item_in_bucket() {
 	
 	// fill the cache first
 	foo* first_in_bucket = NULL;
-	for(size_t i=1; i<13; i++) {
+	for(size_t i=1; i<CACHE_SIZE; i++) {
 		foo* temp = (foo*)malloc( sizeof(foo) );
 		counters.foo_allocs++;
 		temp->b = i;
 		add_item( store, temp, i );
-		if( i == 11 ) {
+		if( i == 8 ) {
 			first_in_bucket = temp;
 		}
 	}
 	
 	// puts it on the free list
-	release_item( store, first_in_bucket, 11 );
+	release_item( store, first_in_bucket, 8 );
 	
-	// add some random new item, should evict 11
+	// add some random new item, should evict 8
 	foo* temp = (foo*)malloc( sizeof(foo) );
 	counters.foo_allocs++;
 	temp->b = 1234;
@@ -508,15 +516,15 @@ static void test_evict_middle_item_in_bucket() {
 
 int main() {
 
-	test_evict_middle_item_in_bucket();
+	// test_evict_middle_item_in_bucket();
+	//
+	// test_evict_first_item_in_bucket();
+	//
+	// test_single_add_release_get();
+	//
+	// test_add();
 
-	test_evict_first_item_in_bucket();
-
-	test_single_add_release_get();
-
-	test_add();
-
-	test_add_release();
+	// test_add_release();
 
 	test_free_entry_reuse();
 	
