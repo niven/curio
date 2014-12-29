@@ -3,7 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define CACHE_SIZE 12
+
+#define CACHE_MEMORY_BYTES 4096
 
 typedef struct counter {
 	size_t foo_allocs;
@@ -27,21 +28,11 @@ static void print_counters() {
 	
 }
 
-// MurmurHash3 integer finalizer MOD cache buckets
-static size_t hash(size_t i) {
-
-	size_t h = i;
-	h ^= h >> 16;
-	h *= 0x85ebca6b;
-	h ^= h >> 13;
-	h *= 0xc2b2ae35;
-	h ^= h >> 16;
-	return h % CACHE_SIZE;
-}
 
 // test item to store
 typedef struct foo {
 	size_t b;
+	char padding[256];
 } foo;
 
 // doubly linked list of refcount==0 entries in cache
@@ -64,19 +55,47 @@ typedef struct entry {
 	struct entry* next;
 } entry;
 
+#define BYTES_PER_CACHE_ITEM (sizeof(entry*) + sizeof(entry) + sizeof(free_entry) + sizeof(foo))
+#define CACHE_SIZE (CACHE_MEMORY_BYTES / BYTES_PER_CACHE_ITEM)
 
 typedef struct cache {
-	entry* buckets[CACHE_SIZE];
+	entry* buckets[ CACHE_SIZE ];
 	size_t num_stored;
 	free_entry* free_list;
 } cache;
 
+
+// MurmurHash3 integer finalizer MOD cache buckets
+static size_t hash(size_t i) {
+
+	size_t h = i;
+	h ^= h >> 16;
+	h *= 0x85ebca6b;
+	h ^= h >> 13;
+	h *= 0xc2b2ae35;
+	h ^= h >> 16;
+	return h % CACHE_SIZE;
+}
+
+
+static cache* new_cache() {
+	
+	printf("Bytes per item: %lu, cache mem: %d, cache_size= %lu\n", BYTES_PER_CACHE_ITEM, CACHE_MEMORY_BYTES, CACHE_SIZE);
+	
+	cache* store = (cache*) malloc( sizeof(cache) );
+	memset( store->buckets, 0, sizeof(store->buckets) );
+	store->num_stored = 0;
+	store->free_list = NULL;
+	return store;
+}
+
+
 static void dump( cache* c ) {
 	
-	printf("Cache (%lu items):\n", c->num_stored);
+	printf("Cache (%lu items): (%p)\n", c->num_stored, c->buckets);
 	for(size_t i=0; i<CACHE_SIZE; i++ ) {
+		printf("bucket[%lu] = (%p) -> (%p)\n", i, &c->buckets[i], c->buckets[i]);
 		entry* current = c->buckets[i];
-		printf("bucket %lu %p\n", i, current);
 		while( current != NULL ) {
 			printf("\tentry key=%lu (foo.b = %lu) refcount: %lu\n", current->key, current->ptr.to_foo->b, current->refcount );
 			current = current->next;
@@ -99,7 +118,7 @@ static void clear_cache( cache* c ) {
 	
 	printf("Clearing the cache\n");
 	// free all items in the buckets
-	for( int b=0; b<CACHE_SIZE; b++ ) {
+	for( size_t b=0; b<CACHE_SIZE; b++ ) {
 		entry* current = c->buckets[b];
 		while( current != NULL ) {
 			// only free actual foos
@@ -303,18 +322,11 @@ static void checks() {
 	
 }
 
-static cache* new_cache() {
-	cache* store = (cache*) malloc( sizeof(cache) );
-	memset( store->buckets, 0, sizeof(store->buckets) );
-	store->num_stored = 0;
-	store->free_list = NULL;
-	return store;
-}
-
 static void test_add() {
 	
 
 	cache* store = new_cache();
+	dump( store );
 	
 	printf("==== Adding keys 1-10 ====\n");
 	
