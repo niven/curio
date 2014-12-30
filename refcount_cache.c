@@ -102,7 +102,13 @@ static void dump( cache* c ) {
 		printf("bucket[%lu] = (%p) -> (%p)\n", i, &c->buckets[i], c->buckets[i]);
 		entry* current = c->buckets[i];
 		while( current != NULL ) {
-			printf("\tentry key=%lu (foo.b = %lu) refcount: %lu\n", current->key, current->ptr.to_foo->b, current->refcount );
+			foo* current_foo = NULL;
+			if( current->refcount == 0 ) {
+				current_foo = current->ptr.to_free_entry->evictable_foo;
+			} else {
+				current_foo = current->ptr.to_foo;
+			}
+			printf("\tentry key=%lu (foo.b = %lu, dirty: %s) refcount: %lu\n", current->key, current_foo->b, current_foo->is_dirty ? "true" : "false", current->refcount );
 			current = current->next;
 		}
 	}
@@ -111,8 +117,8 @@ static void dump( cache* c ) {
 	free_entry* current = c->free_list;
 	if( current != NULL ){
 		do {
-			printf("\tfree entry: key=%lu (foo.b=%lu) [next=%lu, prev=%lu]\n", 
-			current->key, current->evictable_foo->b, current->next->key, current->prev->key );
+			printf("\tfree entry: key=%lu (foo.b=%lu dirty=%s) [next=%lu, prev=%lu]\n", 
+			current->key, current->evictable_foo->b, current->evictable_foo->is_dirty ? "true" : "false", current->next->key, current->prev->key );
 			current = current->next;	
 		} while( current != c->free_list );
 	}
@@ -524,19 +530,46 @@ static void test_evict_middle_item_in_bucket() {
 	
 }
 
+static void test_dirty_items() {
+	
+	cache* store = new_cache();
+	
+	printf("==== Testing recycling dirty items first ====\n");
+	// fill the cache first
+	foo* saved[CACHE_SIZE+1];
+	for(size_t i=1; i<=CACHE_SIZE; i++) {
+		foo* temp = (foo*)malloc( sizeof(foo) );
+		saved[i] = temp;
+		counters.foo_allocs++;
+		temp->b = i;
+		temp->is_dirty = i % 2 == 0; // even items are dirty
+		add_item( store, temp, i );
+	}
+	dump( store );
+	
+	// release half the items
+	for(size_t i=1; i<=CACHE_SIZE/2; i++) {
+		release_item( store, saved[i], i );
+	}
+	dump( store );
+	
+}
+
 int main() {
 
-	test_evict_middle_item_in_bucket();
-
-	test_evict_first_item_in_bucket();
-
-	test_single_add_release_get();
-
-	test_add();
-
-	test_add_release();
-
-	test_free_entry_reuse();
+	// test_evict_middle_item_in_bucket();
+	//
+	// test_evict_first_item_in_bucket();
+	//
+	// test_single_add_release_get();
+	//
+	// test_add();
+	//
+	// test_add_release();
+	//
+	// test_free_entry_reuse();
+	
+	test_dirty_items();
 	
 	return 0;
 }
