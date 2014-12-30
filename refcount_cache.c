@@ -92,6 +92,7 @@ static cache* new_cache() {
 	memset( store->buckets, 0, sizeof(store->buckets) );
 	store->num_stored = 0;
 	store->free_list = NULL;
+	store->free_list_dirty = NULL;
 	return store;
 }
 
@@ -114,7 +115,7 @@ static void dump( cache* c ) {
 		}
 	}
 
-	printf("Free list:\n");
+	printf("Free list (clean):\n");
 	free_entry* current = c->free_list;
 	if( current != NULL ){
 		do {
@@ -122,6 +123,16 @@ static void dump( cache* c ) {
 			current->key, current->evictable_foo->b, current->evictable_foo->is_dirty ? "true" : "false", current->next->key, current->prev->key );
 			current = current->next;	
 		} while( current != c->free_list );
+	}
+	
+	printf("Free list (dirty):\n");
+	current = c->free_list_dirty;
+	if( current != NULL ){
+		do {
+			printf("\tfree entry: key=%lu (foo.b=%lu dirty=%s) [next=%lu, prev=%lu]\n", 
+			current->key, current->evictable_foo->b, current->evictable_foo->is_dirty ? "true" : "false", current->next->key, current->prev->key );
+			current = current->next;	
+		} while( current != c->free_list_dirty );
 	}
 	
 }
@@ -151,19 +162,24 @@ static void clear_cache( cache* c ) {
 	
 	// now all foos in entries are freed, as well as all entries
 	// free the free_entry and foos they contain
-	free_entry* current = c->free_list;
-	// break the chain
-	if( current != NULL ) {
-		current->prev->next = NULL;
-	}
-	while( current != NULL ) {
-		printf("\tfree entry %lu\n", current->key );
-		free( current->evictable_foo );
-		counters.foo_frees++;
-		free_entry* next = current->next;
-		free( current );
-		counters.free_entry_frees++;
-		current = next;
+	free_entry* free_lists[2] = { c->free_list, c->free_list_dirty };
+	for(int i=0; i<2; i++){
+
+		free_entry* current = free_lists[i];
+		// break the chain
+		if( current != NULL ) {
+			current->prev->next = NULL;
+		}
+		while( current != NULL ) {
+			printf("\tfree entry %lu\n", current->key );
+			free( current->evictable_foo );
+			counters.foo_frees++;
+			free_entry* next = current->next;
+			free( current );
+			counters.free_entry_frees++;
+			current = next;
+		}
+		
 	}
 	
 	c->num_stored = 0;
@@ -229,11 +245,13 @@ static void add_item( cache* c, foo* f, size_t key ) {
 		// check the free list
 		
 		if( c->free_list != NULL ) {
-
+			printf("Evicting a clean item\n");
 			evict_item( c, &c->free_list );
-
+		} else if( c->free_list_dirty != NULL ) {
+			printf("Evicting a dirty item\n");
+			evict_item( c, &c->free_list_dirty );
 		} else {
-			printf("Nothing in the free list.\n");
+			printf("Nothing in the free lists.\n");
 			return;
 		}
 
@@ -280,6 +298,10 @@ static foo* get_item( cache* c, size_t key ) {
 				if( c->free_list == discard ) {	
 					c->free_list = discard->next == discard ? NULL : discard->next;
 				}
+				if( c->free_list_dirty == discard ) {	
+					c->free_list_dirty = discard->next == discard ? NULL : discard->next;
+				}
+				
 				free( discard );
 				discard = NULL;
 				counters.free_entry_frees++;
@@ -310,18 +332,20 @@ static void release_item( cache* c, foo* f, size_t key ) {
 				new_head->evictable_foo = i->ptr.to_foo; // keep the actual thing we store
 				i->ptr.to_free_entry = new_head; // replace it with ref to the free_entry
 				new_head->key = key;
-				if( c->free_list == NULL ) {
+				
+				free_entry** free_list = new_head->evictable_foo->is_dirty ? &c->free_list_dirty : &c->free_list;
+				if( *free_list == NULL ) {
 					printf("empty free_list, setting first item\n");
 					new_head->next = new_head;
 					new_head->prev = new_head;
 				} else {
-					new_head->next = c->free_list;
-					new_head->prev = c->free_list->prev;
-					c->free_list->prev = new_head;
+					new_head->next = *free_list;
+					new_head->prev = (*free_list)->prev;
+					(*free_list)->prev = new_head;
 					new_head->prev->next = new_head;
 				}
 
-				c->free_list = new_head;
+				*free_list = new_head;
 			}
 			return;
 		}
@@ -547,8 +571,8 @@ static void count_free_entries_by_dirty_clean( cache* store, size_t* clean, size
 			foo* current;
 			if( e->refcount == 0 ) {
 				current = e->ptr.to_free_entry->evictable_foo;
-				*dirty += current->is_dirty;
-				*clean += !current->is_dirty;
+				*dirty += current->is_dirty == true;
+				*clean += current->is_dirty == false;
 			}
 			e = e->next;
 		}
@@ -588,10 +612,12 @@ static void test_dirty_items() {
 	
 	// add 2 items (forcing 2 to be evicted) and check if the clean ones were
 	foo* replacer1 = (foo*)malloc( sizeof(foo) );
+	counters.foo_allocs++;
 	replacer1->b = 31415;
 	replacer1->is_dirty = false;
 	add_item( store, replacer1, 31415 );
 	foo* replacer2 = (foo*)malloc( sizeof(foo) );
+	counters.foo_allocs++;
 	replacer2->b = 21718;
 	replacer2->is_dirty = false;
 	add_item( store, replacer2, 21718 );
@@ -605,6 +631,11 @@ static void test_dirty_items() {
 	
 	assert( num_dirty_items_in_cache_after == num_dirty_items_in_cache );
 	assert( num_clean_items_in_cache_after == num_clean_items_in_cache - 2);
+	
+	clear_cache( store );
+	print_counters();
+	checks();
+	
 }
 
 int main() {
@@ -621,7 +652,7 @@ int main() {
 
 	test_free_entry_reuse();
 	
-	// test_dirty_items();
+	test_dirty_items();
 	
 	return 0;
 }
