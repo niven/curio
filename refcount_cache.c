@@ -530,6 +530,23 @@ static void test_evict_middle_item_in_bucket() {
 	
 }
 
+static void count_free_entries_by_dirty_clean( cache* store, size_t* clean, size_t* dirty ) {
+
+	for(size_t i=0; i<CACHE_SIZE; i++) {
+		entry* e = store->buckets[i];
+		while( e != NULL ) {
+			foo* current;
+			if( e->refcount == 0 ) {
+				current = e->ptr.to_free_entry->evictable_foo;
+				*dirty += current->is_dirty;
+				*clean += !current->is_dirty;
+			}
+			e = e->next;
+		}
+	}
+	
+}
+
 static void test_dirty_items() {
 	
 	cache* store = new_cache();
@@ -553,6 +570,32 @@ static void test_dirty_items() {
 	}
 	dump( store );
 	
+	// now the free list is 1,2,3,4,5 (2,4 clean and 1,3,5 dirty) (depending on the cache size)
+	size_t num_clean_items_in_cache = 0;
+	size_t num_dirty_items_in_cache = 0;
+	count_free_entries_by_dirty_clean( store, &num_clean_items_in_cache, &num_dirty_items_in_cache);
+	printf("Clean items: %lu\n", num_clean_items_in_cache);
+	printf("Dirty items: %lu\n", num_dirty_items_in_cache);
+	
+	// add 2 items (forcing 2 to be evicted) and check if the clean ones were
+	foo* replacer1 = (foo*)malloc( sizeof(foo) );
+	replacer1->b = 31415;
+	replacer1->is_dirty = false;
+	add_item( store, replacer1, 31415 );
+	foo* replacer2 = (foo*)malloc( sizeof(foo) );
+	replacer2->b = 21718;
+	replacer2->is_dirty = false;
+	add_item( store, replacer2, 21718 );
+	dump( store );
+	
+	size_t num_clean_items_in_cache_after = 0;
+	size_t num_dirty_items_in_cache_after = 0;
+	count_free_entries_by_dirty_clean( store, &num_clean_items_in_cache_after, &num_dirty_items_in_cache_after);
+	printf("Clean items: %lu\n", num_clean_items_in_cache_after);
+	printf("Dirty items: %lu\n", num_dirty_items_in_cache_after);
+	
+	assert( num_dirty_items_in_cache_after == num_dirty_items_in_cache );
+	assert( num_clean_items_in_cache_after == num_clean_items_in_cache - 2);
 }
 
 int main() {
