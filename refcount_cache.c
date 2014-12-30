@@ -169,60 +169,68 @@ static void clear_cache( cache* c ) {
 	c->free_list = NULL;
 }
 
+static void evict_item( cache* c, free_entry** free_list ) {
+	
+	// take the first thing in the free list
+	free_entry* fe = *free_list;
+	// remove it from the free list
+	if( (*free_list)->next == *free_list ) { // just single item
+		*free_list = NULL;
+	} else {
+		// [prev]<->[fe]<->[next]
+		//           ^
+		//           c->free_list
+		fe->prev->next = fe->next;
+		fe->next->prev = fe->prev;
+		*free_list = fe->next;
+	}
+	// now our free list is ok again
+	size_t b = hash(fe->key);
+	printf("Can evict key %lu from free list (it's in bucket %lu)\n", fe->key, b );
+	
+	// find and remove the entry from the bucket
+	entry* entry_to_free = NULL;
+	if( c->buckets[b]->key == fe->key ) { // it's the head item
+		printf("Removing the entry from the bucket (it was the head)\n");
+		entry_to_free = c->buckets[b];
+		c->buckets[b] = c->buckets[b]->next; // just move to the next one
+	} else {
+		entry* current;
+		for(current = c->buckets[b]; current->next->key != fe->key; current = current->next ) {
+			printf("Checking key %lu (next %lu)\n", current->key, current->next->key );
+			if( current->key == fe->key ) {
+				break;
+			}
+			assert( current->next != NULL ); // it has to be in this list
+		}
+		printf("Found the bucket entry: key %lu (next %lu)\n", current->key, current->next->key );
+		entry_to_free = current->next;
+		current->next = current->next->next; // skip over it
+	}
+	assert( entry_to_free != NULL );
+	
+	// free the free_entry, the foo it points to and the entry in the bucket
+	free( fe->evictable_foo );
+	counters.foo_frees++;
+	free( fe );
+	counters.entry_frees++;
+	free( entry_to_free );
+	counters.free_entry_frees++;
+	c->num_stored--;
+	
+}
+
 static void add_item( cache* c, foo* f, size_t key ) {
 
 	printf("Adding item %lu\n", key);
 	if( c->num_stored == CACHE_SIZE ) {
 		printf("Cache full\n");
 		// check the free list
+		
 		if( c->free_list != NULL ) {
-			// take the first thing in the free list
-			free_entry* fe = c->free_list;
-			// remove it from the free list
-			if( c->free_list->next == c->free_list ) { // just single item
-				c->free_list = NULL;
-			} else {
-				// [prev]<->[fe]<->[next]
-				//           ^
-				//           c->free_list
-				fe->prev->next = fe->next;
-				fe->next->prev = fe->prev;
-				c->free_list = fe->next;
-			}
-			// now our free list is ok again
-			size_t b = hash(fe->key);
-			printf("Can evict key %lu from free list (it's in bucket %lu)\n", fe->key, b );
-			
-			// find and remove the entry from the bucket
-			entry* entry_to_free = NULL;
-			if( c->buckets[b]->key == fe->key ) { // it's the head item
-				printf("Removing the entry from the bucket (it was the head)\n");
-				entry_to_free = c->buckets[b];
-				c->buckets[b] = c->buckets[b]->next; // just move to the next one
-			} else {
-				entry* current;
-				for(current = c->buckets[b]; current->next->key != fe->key; current = current->next ) {
-					printf("Checking key %lu (next %lu)\n", current->key, current->next->key );
-					if( current->key == fe->key ) {
-						break;
-					}
-					assert( current->next != NULL ); // it has to be in this list
-				}
-				printf("Found the bucket entry: key %lu (next %lu)\n", current->key, current->next->key );
-				entry_to_free = current->next;
-				current->next = current->next->next; // skip over it
-			}
-			assert( entry_to_free != NULL );
-			
-			// free the free_entry, the foo it points to and the entry in the bucket
-			free( fe->evictable_foo );
-			counters.foo_frees++;
-			free( fe );
-			counters.entry_frees++;
-			free( entry_to_free );
-			counters.free_entry_frees++;
-			// fall out and carry on with inserting 
-			c->num_stored--;
+
+			evict_item( c, &c->free_list );
+
 		} else {
 			printf("Nothing in the free list.\n");
 			return;
@@ -600,19 +608,19 @@ static void test_dirty_items() {
 
 int main() {
 
-	// test_evict_middle_item_in_bucket();
-	//
-	// test_evict_first_item_in_bucket();
-	//
-	// test_single_add_release_get();
-	//
-	// test_add();
-	//
-	// test_add_release();
-	//
-	// test_free_entry_reuse();
+	test_evict_middle_item_in_bucket();
+
+	test_evict_first_item_in_bucket();
+
+	test_single_add_release_get();
+
+	test_add();
+
+	test_add_release();
+
+	test_free_entry_reuse();
 	
-	test_dirty_items();
+	// test_dirty_items();
 	
 	return 0;
 }
