@@ -67,6 +67,7 @@ typedef struct cache {
 	entry* buckets[ CACHE_SIZE ];
 	size_t num_stored;
 	free_entry* free_list;
+	free_entry* free_list_dirty;
 } cache;
 
 
