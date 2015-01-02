@@ -147,17 +147,12 @@ static void dump_list( cache* c, const char* title, entry* head ) {
 static void dump( cache* c ) {
 	
 	printf("###############################\n");
-	entry* current;
+
+	char buf[256];
 	printf("Cache (size %d)\nBuckets start %p\n", CACHE_SIZE, c->buckets);
 	for(int i=0; i<CACHE_SIZE; i++) {
-		current = c->buckets[i];
-		printf("Bucket[%d]\n", i);
-		if( current != NULL ) {
-			do {
-				printf("\tkey %d, refcount %d, item { id = %d, value = %d, dirty = %s } [entry %ld]\n", current->key, current->refcount, current->item->id, current->item->value, current->item->is_dirty ? "true" : "false", current - &c->entries[0] );
-				current = current->next_entry;
-			} while( current != c->buckets[i] );
-		}
+		sprintf( buf, "Bucket[%d]", i );
+		dump_list( c, buf, c->buckets[i] );
 	}
 	
 	dump_list( c, "Unused entries", c->unused_entries );
