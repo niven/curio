@@ -43,14 +43,10 @@ typedef struct cache {
 	// all the entries we use
 	entry entries[CACHE_SIZE];
 	
-	// unused ones
-	// list that is initially every entry
-	entry* unused_entries;
-	
 	// refcount 0 ones with status=dirty or status=clean
 	// these are double linked lists for O(1) add/remove
 	entry* available_dirty_entries;
-	entry* available_clean_entries;
+	entry* available_clean_entries; // initially holds the unused items
 	
 } cache;
 
@@ -102,7 +98,6 @@ static cache* new_cache() {
 	
 	c->available_clean_entries = NULL;
 	c->available_dirty_entries = NULL;
-	c->unused_entries = NULL;
 	
 	// setup the unused list
 	for( int i=0; i<CACHE_SIZE; i++ ) {
@@ -112,16 +107,32 @@ static cache* new_cache() {
 	return c;
 }
 
+static void free_item( item* i ) {
+	
+	// TODO(errors): maybe assert here? Could indicate a big to free a NULL item
+	if( i == NULL ) {
+		return;
+	}
+	if( i->is_dirty ) {
+		printf("Dirty entry needs writing to disk or something: { id = %d, value = %d }\n", i->id, i->value );		
+	} else {
+		printf("Freeing clean item { id = %d, value = %d }\n", i->id, i->value );
+	}
+
+	free( i );
+}
+
+
 static void flush_cache( cache* c ) {
 
 	printf("Flushing all dirty items\n");
 	entry* current = NULL;
 	if( (current = c->available_dirty_entries) ) {
 		do {
-			printf("Dirty entry needs writing to disk or something: { id = %d, value = %d }\n", current->item->id, current->item->value );
 			if( current->refcount > 0 ) {
-				printf("\tWarning: refcount not 0 for item ID = %d\n", current->item->id );
-			}
+				fprintf( stderr, "\tWarning: refcount not 0 for item ID = %d\n", current->item->id );
+			}			
+			free_item( current->item );
 		} while( current != c->available_dirty_entries );
 	}
 	
@@ -155,7 +166,6 @@ static void dump( cache* c ) {
 		dump_list( c, buf, c->buckets[i] );
 	}
 	
-	dump_list( c, "Unused entries", c->unused_entries );
 	dump_list( c, "Available clean entries", c->available_clean_entries );
 	dump_list( c, "Available dirty entries", c->available_dirty_entries );
 
@@ -172,7 +182,7 @@ static void release_item( cache* c, item* i ) {
 
 	if( c->buckets[b] == NULL ) {
 		printf("Item not in cache, freeing\n");
-		free( i ); // Here one would call free_item( ... ) that does stats & counters and writing thins like dirty items to disk
+		free_item( i );
 		return;
 	}
 	
@@ -192,8 +202,8 @@ static void release_item( cache* c, item* i ) {
 		current = current->next_entry;
 	} while( current != c->buckets[b] );
 	
-	printf("Item not in cache, freeing\n");
-	free( i ); // Here one would call free_item( ... ) that does stats & counters and writing thins like dirty items to disk
+	printf("Item not in cache, freeing.\n");
+	free_item( i );
 	
 }
 
@@ -209,19 +219,8 @@ static void add_item( cache* c, item* i ) {
 	int b = i->id % CACHE_SIZE; // works if IDs are autoinc keys I think, and avoids hashing
 	printf("Want to insert { id = %d, value = %d } into bucket %d\n", i->id, i->value, b);
 	// get an available entry
-	if( c->unused_entries != NULL ) {
-		printf("unused entry available\n");
-		entry* first_unused_entry = c->unused_entries;
-		remove_from_list( &c->unused_entries, first_unused_entry );
-		
-		set_entry( first_unused_entry, i );
-				
-		// doesn't really have to be a doubly linked list, but it might as well be
-		// and this makes the code MUCH cleaner. (well, could add functions for single list..)
-		insert_into_list( &c->buckets[b], first_unused_entry );
-		
-	} else if( c->available_clean_entries != NULL ) {
-		printf("no more unused entries, clean entry available\n");
+	if( c->available_clean_entries != NULL ) {
+		printf("clean entry available\n");
 		entry* some_clean_entry = c->available_clean_entries;
 		remove_from_list( &c->available_clean_entries, some_clean_entry );
 		// printf("Freeing clean item %d\n", some_clean_entry->item->id );
@@ -230,7 +229,7 @@ static void add_item( cache* c, item* i ) {
 		insert_into_list( &c->buckets[b], some_clean_entry );
 
 	} else if( c->available_dirty_entries != NULL ) {
-		printf("no more unused entries, dirty entry available\n");
+		printf("dirty entry available\n");
 		entry* some_dirty_entry = c->available_dirty_entries;
 		remove_from_list( &c->available_dirty_entries, some_dirty_entry );
 		printf("Freeing dirty item %d\n", some_dirty_entry->item->id );
