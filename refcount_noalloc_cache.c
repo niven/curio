@@ -161,24 +161,8 @@ static void dump( cache* c ) {
 	}
 	
 	dump_list( c, "Unused entries", c->unused_entries );
-
-	printf("Available dirty entries:\n");
-	if( (current = c->available_dirty_entries) ) {
-		do { 
-			printf("\t{ id = %d, value = %d }\n", current->item->id, current->item->value );
-			current = current->next_entry;
-		}
-		while( current != c->available_dirty_entries );		
-	}
-	
-	printf("Available clean entries:\n");
-	if( (current = c->available_clean_entries) ) {
-		do {
-			printf("\t{ id = %d, value = %d }\n", current->item->id, current->item->value );
-			current = current->next_entry;
-		}
-		while( current != c->available_clean_entries );
-	}	
+	dump_list( c, "Available clean entries", c->available_clean_entries );
+	dump_list( c, "Available dirty entries", c->available_dirty_entries );
 
 	printf("###############################\n\n");
 	
