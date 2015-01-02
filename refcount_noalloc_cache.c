@@ -53,8 +53,8 @@ typedef struct cache {
 
 static void remove_from_list( entry** list, entry* element ) {
 	
-	assert( *list != NULL );
-	assert( element != NULL );
+	assert( *list );
+	assert( element );
 	
 	// last element on the list
 	if( element->next_entry == element ) {
@@ -72,7 +72,7 @@ static void remove_from_list( entry** list, entry* element ) {
 static void insert_into_list( entry** list, entry* element ) {
 
 	// could be NULL
-	assert( element != NULL );
+	assert( element );
 	assert( *list != element );
 	
 	if( *list == NULL ) {
@@ -92,7 +92,7 @@ static void insert_into_list( entry** list, entry* element ) {
 static cache* new_cache() {
 	
 	cache* c = (cache*) malloc( sizeof(cache) );
-	assert( c != NULL );
+	assert( c );
 	
 	printf("num b: %d, bsz: %lu\n", CACHE_SIZE, sizeof(c->buckets) );
 	memset( c->buckets, 0, sizeof(c->buckets) );
@@ -177,7 +177,7 @@ static void dump( cache* c ) {
 static void release_item( cache* c, item* i ) {
 
 	printf("Releasing item %d\n", i->id );
-	assert( i != NULL );
+	assert( i );
 
 	int b = i->id % CACHE_SIZE; // works if IDs are autoinc keys I think, and avoids hashing
 
