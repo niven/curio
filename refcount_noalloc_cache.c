@@ -2,6 +2,7 @@
 #include <stdio.h> // printf
 #include <string.h> // memset
 #include <assert.h>
+#include <time.h> // time() for srand
 
 typedef char bool;
 #define true 1
@@ -219,26 +220,26 @@ static void add_item( cache* c, item* i ) {
 	int b = i->id % CACHE_SIZE; // works if IDs are autoinc keys I think, and avoids hashing
 	printf("Want to insert { id = %d, value = %d } into bucket %d\n", i->id, i->value, b);
 	// get an available entry
+	entry* available_entry = NULL;
+	entry** from_list = NULL;
+	
 	if( c->available_clean_entries != NULL ) {
 		printf("clean entry available\n");
-		entry* some_clean_entry = c->available_clean_entries;
-		remove_from_list( &c->available_clean_entries, some_clean_entry );
-		// printf("Freeing clean item %d\n", some_clean_entry->item->id );
-		free( some_clean_entry->item ); // Here one would call free_item( ... ) that does stats & counters and writing thins like dirty items to disk
-		set_entry( some_clean_entry, i );
-		insert_into_list( &c->buckets[b], some_clean_entry );
-
+		available_entry = c->available_clean_entries;
+		from_list = &c->available_clean_entries;
 	} else if( c->available_dirty_entries != NULL ) {
 		printf("dirty entry available\n");
-		entry* some_dirty_entry = c->available_dirty_entries;
-		remove_from_list( &c->available_dirty_entries, some_dirty_entry );
-		printf("Freeing dirty item %d\n", some_dirty_entry->item->id );
-		free( some_dirty_entry->item ); // Here one would call free_item( ... ) that does stats & counters and writing thins like dirty items to disk
-		set_entry( some_dirty_entry, i );
-		insert_into_list( &c->buckets[b], some_dirty_entry );
-
-
-	} else {
+		available_entry = c->available_dirty_entries;
+		from_list = &c->available_dirty_entries;
+	}
+	
+	if( available_entry ) {
+		remove_from_list( from_list, available_entry );
+		free( available_entry->item );
+		set_entry( available_entry, i );
+		insert_into_list( &c->buckets[b], available_entry );
+	}
+	 else {
 		printf("Cache full, not storing item %d\n", i->id );
 	}
 	
@@ -284,6 +285,7 @@ static void test_add_release() {
 		item* foo = (item*) malloc( sizeof(item) );
 		foo->id = rand() % 128;
 		foo->value = i;
+		foo->is_dirty = rand() % 2 == 0;
 		add_item( store, foo );
 		dump( store );
 		release_item( store, foo );
@@ -299,6 +301,8 @@ static void test_add_release() {
 }
 
 int main() {
+	
+	srand( (unsigned int)time(NULL) );
 	//
 	// test_empty();
 	// test_add();
