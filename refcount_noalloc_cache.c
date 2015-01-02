@@ -127,6 +127,23 @@ static void flush_cache( cache* c ) {
 	
 }
 
+static void dump_list( cache* c, const char* title, entry* head ) {
+	
+	printf("%s:\n", title);
+	entry* current;
+	if( (current = head) ) {
+		do {
+			if( current->item == NULL ) {
+				printf("\tkey %d, refcount %d (no item) [entry %ld]\n", current->key, current->refcount, current - &c->entries[0] );				
+			} else {
+				printf("\tkey %d, refcount %d, item { id = %d, value = %d, dirty = %s } [entry %ld]\n", current->key, current->refcount, current->item->id, current->item->value, current->item->is_dirty ? "true" : "false", current - &c->entries[0] );				
+			}
+			current = current->next_entry;
+		} while( current != head );		
+	}
+	
+}
+
 static void dump( cache* c ) {
 	
 	printf("###############################\n");
@@ -137,24 +154,18 @@ static void dump( cache* c ) {
 		printf("Bucket[%d]\n", i);
 		if( current != NULL ) {
 			do {
-				printf("\tkey %d, refcount %d, item->value %d [entry %ld]\n", current->key, current->refcount, current->item->value, current - &c->entries[0] );
+				printf("\tkey %d, refcount %d, item { id = %d, value = %d, dirty = %s } [entry %ld]\n", current->key, current->refcount, current->item->id, current->item->value, current->item->is_dirty ? "true" : "false", current - &c->entries[0] );
 				current = current->next_entry;
 			} while( current != c->buckets[i] );
 		}
 	}
 	
-	printf("Unused entries:\n");
-	if( (current = c->unused_entries) ) {
-		do {
-			printf("\tentry %p (entry index %ld)\n", current, (current - &c->entries[0]) );
-			current = current->next_entry;
-		} while( current != c->unused_entries );		
-	}
+	dump_list( c, "Unused entries", c->unused_entries );
 
 	printf("Available dirty entries:\n");
 	if( (current = c->available_dirty_entries) ) {
 		do { 
-			printf("\trefcount %d\n", current->refcount );
+			printf("\t{ id = %d, value = %d }\n", current->item->id, current->item->value );
 			current = current->next_entry;
 		}
 		while( current != c->available_dirty_entries );		
@@ -163,7 +174,7 @@ static void dump( cache* c ) {
 	printf("Available clean entries:\n");
 	if( (current = c->available_clean_entries) ) {
 		do {
-			printf("\trefcount %d\n", current->refcount );
+			printf("\t{ id = %d, value = %d }\n", current->item->id, current->item->value );
 			current = current->next_entry;
 		}
 		while( current != c->available_clean_entries );
@@ -173,7 +184,47 @@ static void dump( cache* c ) {
 	
 }
 
+static void release_item( cache* c, item* i ) {
 
+	printf("Releasing item %d\n", i->id );
+	assert( i != NULL );
+
+	int b = i->id % CACHE_SIZE; // works if IDs are autoinc keys I think, and avoids hashing
+
+	if( c->buckets[b] == NULL ) {
+		printf("Item not in cache, freeing\n");
+		free( i ); // Here one would call free_item( ... ) that does stats & counters and writing thins like dirty items to disk
+		return;
+	}
+	
+	entry* current = c->buckets[b];
+	do {
+		if( current->key == i->id ) { // TODO(performance): yeah, so why not lookup the id from current? would also save space..
+			printf("Found item in cache\n");
+			assert( current->refcount > 0 );
+			current->refcount--;
+			if( current->refcount == 0 ) {
+				remove_from_list( &c->buckets[b], current );
+				entry** available_list = i->is_dirty ? &c->available_dirty_entries : &c->available_clean_entries;
+				insert_into_list( available_list, current );				
+			}
+			return;
+		}
+		current = current->next_entry;
+	} while( current != c->buckets[b] );
+	
+	printf("Item not in cache, freeing\n");
+	free( i ); // Here one would call free_item( ... ) that does stats & counters and writing thins like dirty items to disk
+	
+}
+
+static void set_entry( entry* e, item* i ) {
+
+	e->item = i;
+	e->key = i->id;
+	e->refcount = 1;
+
+}
 static void add_item( cache* c, item* i ) {
 	
 	int b = i->id % CACHE_SIZE; // works if IDs are autoinc keys I think, and avoids hashing
@@ -184,10 +235,7 @@ static void add_item( cache* c, item* i ) {
 		entry* first_unused_entry = c->unused_entries;
 		remove_from_list( &c->unused_entries, first_unused_entry );
 		
-		// set the values on this entry
-		first_unused_entry->item = i;
-		first_unused_entry->key = i->id;
-		first_unused_entry->refcount = 1;
+		set_entry( first_unused_entry, i );
 				
 		// doesn't really have to be a doubly linked list, but it might as well be
 		// and this makes the code MUCH cleaner. (well, could add functions for single list..)
@@ -195,35 +243,77 @@ static void add_item( cache* c, item* i ) {
 		
 	} else if( c->available_clean_entries != NULL ) {
 		printf("no more unused entries, clean entry available\n");
-		abort();
+		entry* some_clean_entry = c->available_clean_entries;
+		remove_from_list( &c->available_clean_entries, some_clean_entry );
+		printf("Freeing clean item %d\n", some_clean_entry->item->id );
+		free( some_clean_entry->item ); // Here one would call free_item( ... ) that does stats & counters and writing thins like dirty items to disk
+		set_entry( some_clean_entry, i );
+		insert_into_list( &c->buckets[b], some_clean_entry );
+
 	} else if( c->available_dirty_entries != NULL ) {
 		printf("no more unused entries, dirty entry available\n");
-		abort();
+		entry* some_dirty_entry = c->available_dirty_entries;
+		remove_from_list( &c->available_dirty_entries, some_dirty_entry );
+		printf("Freeing dirty item %d\n", some_dirty_entry->item->id );
+		free( some_dirty_entry->item ); // Here one would call free_item( ... ) that does stats & counters and writing thins like dirty items to disk
+		set_entry( some_dirty_entry, i );
+		insert_into_list( &c->buckets[b], some_dirty_entry );
+
+
 	} else {
 		printf("Cache full, not storing item %d\n", i->id );
 	}
 	
 }
 
+/********************** TESTS *****************************/
+
 static void test_empty() {
+	
+	printf("************** Test new/flush/free ****************\n");
 	cache* store = new_cache();
 	dump( store );
+	flush_cache( store );
 	free(store);	
 }
 
 static void test_add() {
 	
+	printf("************** Test adding more items than fit ****************\n");
 	cache* store = new_cache();
-	for(int i=0; i<8; i++) {
+	for(int i=0; i<CACHE_SIZE*2; i++) {
+
+		item* foo = (item*) malloc( sizeof(item) );
+		foo->id = rand() % 128;
+		foo->value = i;
+		add_item( store, foo );
+	}
+	
+	dump( store );
+	
+	flush_cache( store );
+	free( store );
+	
+	
+}
+
+static void test_add_release() {
+	
+	printf("************** Test adding/releasing items (so should recycle items) ****************\n");
+	cache* store = new_cache();
+	for(int i=0; i<CACHE_SIZE * 2; i++) {
 
 		item* foo = (item*) malloc( sizeof(item) );
 		foo->id = rand() % 128;
 		foo->value = i;
 		add_item( store, foo );
 		dump( store );
+		release_item( store, foo );
+		dump( store );
 	}
 	
 	dump( store );
+	flush_cache( store );
 	
 	free(store);
 	
@@ -231,9 +321,10 @@ static void test_add() {
 }
 
 int main() {
-	
-	test_empty();
-	test_add();
+	//
+	// test_empty();
+	// test_add();
+	test_add_release();
 }
 
 
