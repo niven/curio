@@ -218,22 +218,14 @@ static void set_entry( entry* e, item* i ) {
 static void add_item( cache* c, item* i ) {
 	
 	int b = i->id % CACHE_SIZE; // works if IDs are autoinc keys I think, and avoids hashing
-	printf("Want to insert { id = %d, value = %d } into bucket %d\n", i->id, i->value, b);
+	printf("Want to insert { id = %d, value = %d, is_dirty = %s } into bucket %d\n", i->id, i->value, i->is_dirty ? "true" : "false", b);
+
 	// get an available entry
-	entry* available_entry = NULL;
-	entry** from_list = NULL;
-	
-	if( c->available_clean_entries != NULL ) {
-		printf("clean entry available\n");
-		available_entry = c->available_clean_entries;
-		from_list = &c->available_clean_entries;
-	} else if( c->available_dirty_entries != NULL ) {
-		printf("dirty entry available\n");
-		available_entry = c->available_dirty_entries;
-		from_list = &c->available_dirty_entries;
-	}
+	entry* available_entry = c->available_clean_entries ? c->available_clean_entries : c->available_dirty_entries;
+	entry** from_list = c->available_clean_entries ? &c->available_clean_entries : &c->available_dirty_entries;;
 	
 	if( available_entry ) {
+		printf("Recycled an available item (%d)\n", available_entry->item == NULL ? -1 : available_entry->item->id );
 		remove_from_list( from_list, available_entry );
 		free( available_entry->item );
 		set_entry( available_entry, i );
@@ -303,10 +295,16 @@ static void test_add_release() {
 int main() {
 	
 	srand( (unsigned int)time(NULL) );
-	//
+
 	// test_empty();
 	// test_add();
 	test_add_release();
+	
+	char* a =NULL;//malloc(1);
+	char* b= NULL;//malloc(1);
+	char* c = a ? a : b;
+	char** d = &c;
+	printf("a=%p, b=%p, c=%p, d=%p\n", a ,b, c, d);
 }
 
 
