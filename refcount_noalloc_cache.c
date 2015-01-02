@@ -106,7 +106,7 @@ static cache* new_cache() {
 	
 	// setup the unused list
 	for( int i=0; i<CACHE_SIZE; i++ ) {
-		insert_into_list( &c->unused_entries, &c->entries[i] );
+		insert_into_list( &c->available_clean_entries, &c->entries[i] );
 	}
 	
 	return c;
@@ -224,7 +224,7 @@ static void add_item( cache* c, item* i ) {
 		printf("no more unused entries, clean entry available\n");
 		entry* some_clean_entry = c->available_clean_entries;
 		remove_from_list( &c->available_clean_entries, some_clean_entry );
-		printf("Freeing clean item %d\n", some_clean_entry->item->id );
+		// printf("Freeing clean item %d\n", some_clean_entry->item->id );
 		free( some_clean_entry->item ); // Here one would call free_item( ... ) that does stats & counters and writing thins like dirty items to disk
 		set_entry( some_clean_entry, i );
 		insert_into_list( &c->buckets[b], some_clean_entry );
