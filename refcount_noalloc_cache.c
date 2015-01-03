@@ -69,6 +69,19 @@ static void remove_from_list( entry** list, entry* element ) {
 	
 }
 
+/*
+[a] <--> [b] <--> [c] <--> [a]
+          L
+
+[a] <--> [d] <--> [b] <--> [c] <--> [a]
+          L
+
+d n = L
+d p = L p
+L p = d
+L p n = d
+
+*/
 static void insert_into_list( entry** list, entry* element ) {
 
 	// could be NULL
@@ -76,15 +89,19 @@ static void insert_into_list( entry** list, entry* element ) {
 	assert( *list != element );
 	
 	if( *list == NULL ) {
-		*list = element;
 		element->next_entry = element;
 		element->prev_entry = element;
+		*list = element;
 	} else {
-		element->next_entry = (*list)->next_entry;
-		element->prev_entry = *list;
+		element->next_entry = *list;
+		element->prev_entry = (*list)->prev_entry;
+
+		*list = element;
 
 		(*list)->next_entry->prev_entry = element;
-		(*list)->next_entry = element;		
+		(*list)->prev_entry->next_entry = element;
+
+
 	}
 	
 }
@@ -296,15 +313,10 @@ int main() {
 	
 	srand( (unsigned int)time(NULL) );
 
-	// test_empty();
-	// test_add();
+	test_empty();
+	test_add();
 	test_add_release();
-	
-	char* a =NULL;//malloc(1);
-	char* b= NULL;//malloc(1);
-	char* c = a ? a : b;
-	char** d = &c;
-	printf("a=%p, b=%p, c=%p, d=%p\n", a ,b, c, d);
+
 }
 
 
