@@ -5,8 +5,6 @@
 #include <time.h> // time() for srand
 
 typedef char bool;
-#define true 1
-#define false 0
 
 #define CACHE_MEMORY_BYTES 256
 
@@ -51,6 +49,8 @@ typedef struct cache {
 	
 } cache;
 
+
+// TODO(bug): remove/insert should work to ensure the unused items are used first (and not regular clean items)
 static void remove_from_list( entry** list, entry* element ) {
 	
 	assert( *list );
@@ -100,10 +100,8 @@ static void insert_into_list( entry** list, entry* element ) {
 
 		(*list)->next_entry->prev_entry = element;
 		(*list)->prev_entry->next_entry = element;
-
-
 	}
-	
+
 }
 
 static cache* new_cache() {
@@ -139,7 +137,6 @@ static void free_item( item* i ) {
 
 	free( i );
 }
-
 
 static void flush_cache( cache* c ) {
 
@@ -189,6 +186,30 @@ static void dump( cache* c ) {
 
 	printf("###############################\n\n");
 	
+}
+
+static item* get_item( cache* c, int key ) {
+	
+	int b = key % CACHE_SIZE; // works if IDs are autoinc keys I think, and avoids hashing
+
+	entry* current;
+	if( (current = c->buckets[b]) ) {
+		do {
+			if( current->key == key ) {
+				printf("Found item in cache\n");
+				if( current->refcount == 0 ) {
+					entry** from_list = current->item->is_dirty ? &c->available_dirty_entries : &c->available_clean_entries;
+					remove_from_list( from_list, current );
+				}
+				current->refcount++;
+				return current->item;
+			}
+			current = current->next_entry;
+		} while( current != c->buckets[b] );
+	}
+		
+	return NULL;
+
 }
 
 static void release_item( cache* c, item* i ) {
@@ -261,6 +282,14 @@ static void test_empty() {
 	printf("************** Test new/flush/free ****************\n");
 	cache* store = new_cache();
 	dump( store );
+	
+	// ensure all the unused entries are pushed: order must be CACHE_SIZE, CACHE_SIZE-1, .., 1, 0
+	entry* current = store->available_clean_entries;
+	for(int i=CACHE_SIZE-1; i>=0; i--) {
+		assert( current - &store->entries[0] == i );
+		current = current->next_entry;
+	}
+	
 	flush_cache( store );
 	free(store);	
 }
@@ -304,9 +333,33 @@ static void test_add_release() {
 	dump( store );
 	flush_cache( store );
 	
-	free(store);
+	free(store);	
+}
+
+static void test_revive() {
 	
-	
+	printf("************** Test adding/releasing/getting items (so should revive items) ****************\n");
+	cache* store = new_cache();
+
+	item* foos[CACHE_SIZE];
+	for(int i=0; i<CACHE_SIZE; i++) {
+		foos[i] = (item*) malloc( sizeof(item) );
+		foos[i]->id = rand() % 128;
+		foos[i]->value = i;
+		foos[i]->is_dirty = rand() % 2 == 0;
+		add_item( store, foos[i] );
+		release_item( store, foos[i] );
+	}
+	dump( store );
+	for(int i=0; i<CACHE_SIZE; i++) {
+		item* f = get_item( store, foos[i]->id );
+		assert( f );
+		assert( f == foos[i] );
+	}
+	dump( store );
+
+	flush_cache( store );	
+	free(store);	
 }
 
 int main() {
@@ -314,8 +367,9 @@ int main() {
 	srand( (unsigned int)time(NULL) );
 
 	test_empty();
-	test_add();
-	test_add_release();
+	// test_add();
+	// test_add_release();
+	// test_revive();
 
 }
 
