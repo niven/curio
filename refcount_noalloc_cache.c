@@ -69,6 +69,25 @@ static void remove_from_list( entry** list, entry* element ) {
 	
 }
 
+// remove and return the oldest item from the clean (preferred) or dirty entry list
+static entry* get_available_entry( cache* c ) {
+	
+	entry* target = c->available_clean_entries ? c->available_clean_entries : c->available_dirty_entries;
+	
+	if( target == NULL ) {
+		return NULL;
+	}
+
+	// move to the oldest one
+	target = target->prev_entry;
+
+	entry** from_list = c->available_clean_entries ? &c->available_clean_entries : &c->available_dirty_entries;;
+	remove_from_list( from_list, target );
+	free( target->item );
+
+	return target;
+}
+
 /*
 [a] <--> [b] <--> [c] <--> [a]
           L
@@ -259,13 +278,10 @@ static void add_item( cache* c, item* i ) {
 	printf("Want to insert { id = %d, value = %d, is_dirty = %s } into bucket %d\n", i->id, i->value, i->is_dirty ? "true" : "false", b);
 
 	// get an available entry
-	entry* available_entry = c->available_clean_entries ? c->available_clean_entries : c->available_dirty_entries;
-	entry** from_list = c->available_clean_entries ? &c->available_clean_entries : &c->available_dirty_entries;;
+	entry* available_entry = get_available_entry( c );
 	
 	if( available_entry ) {
 		printf("Recycled an available item (%d)\n", available_entry->item == NULL ? -1 : available_entry->item->id );
-		remove_from_list( from_list, available_entry );
-		free( available_entry->item );
 		set_entry( available_entry, i );
 		insert_into_list( &c->buckets[b], available_entry );
 	}
@@ -367,9 +383,9 @@ int main() {
 	srand( (unsigned int)time(NULL) );
 
 	test_empty();
-	// test_add();
-	// test_add_release();
-	// test_revive();
+	test_add();
+	test_add_release();
+	test_revive();
 
 }
 
