@@ -344,8 +344,11 @@ static void add_item( cache* c, item* i ) {
 	entry* available_entry = get_available_entry( c );
 	
 	if( available_entry ) {
-
+		
 		printf("Recycled an available item (%d)\n", available_entry->item == NULL ? -1 : available_entry->item->id );
+		int old_bucket = available_entry->key % CACHE_SIZE;
+		remove_from_bucket( &c->buckets[old_bucket], available_entry );
+		dump( c );
 		set_entry( available_entry, i );
 		insert_into_bucket( &c->buckets[b], available_entry );
 
@@ -405,7 +408,7 @@ static void test_add_release() {
 		item* foo = (item*) malloc( sizeof(item) );
 		foo->id = i;
 		foo->value = rand() % 128;
-		foo->is_dirty = rand() % 2 == 0 ? true : false;
+		foo->is_dirty = rand() % 2 == 0;
 		add_item( store, foo );
 		dump( store );
 		release_item( store, foo );
