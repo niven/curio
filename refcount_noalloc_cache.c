@@ -403,8 +403,8 @@ static void test_add_release() {
 	for(int i=0; i<CACHE_SIZE * 2; i++) {
 
 		item* foo = (item*) malloc( sizeof(item) );
-		foo->id = rand() % 128;
-		foo->value = i;
+		foo->id = i;
+		foo->value = rand() % 128;
 		foo->is_dirty = rand() % 2 == 0;
 		add_item( store, foo );
 		dump( store );
