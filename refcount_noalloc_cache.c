@@ -405,7 +405,7 @@ static void test_add_release() {
 		item* foo = (item*) malloc( sizeof(item) );
 		foo->id = i;
 		foo->value = rand() % 128;
-		foo->is_dirty = rand() % 2 == 0;
+		foo->is_dirty = rand() % 2 == 0 ? true : false;
 		add_item( store, foo );
 		dump( store );
 		release_item( store, foo );
@@ -426,8 +426,8 @@ static void test_revive() {
 	item* foos[CACHE_SIZE];
 	for(int i=0; i<CACHE_SIZE; i++) {
 		foos[i] = (item*) malloc( sizeof(item) );
-		foos[i]->id = rand() % 128;
-		foos[i]->value = i;
+		foos[i]->id = i;
+		foos[i]->value = rand() % 128;
 		foos[i]->is_dirty = rand() % 2 == 0;
 		add_item( store, foos[i] );
 		release_item( store, foos[i] );
@@ -448,9 +448,9 @@ int main() {
 	
 	srand( (unsigned int)time(NULL) );
 
-	test_empty();
-	test_add();
-	// test_add_release();
+	// test_empty();
+	// test_add();
+	test_add_release();
 	// test_revive();
 
 }
