@@ -91,28 +91,10 @@ static void remove_from_list( entry** list, entry* element ) {
 	
 }
 
-// remove and return the oldest item from the clean (preferred) or dirty entry list
-static entry* get_available_entry( cache* c ) {
-	
-	entry* target = c->available_clean_entries ? c->available_clean_entries : c->available_dirty_entries;
-
-	// nothing available in either the clean entries or dirty entries list
-	if( target == NULL ) {
-		return NULL;
-	}
-
-	// move to the oldest one
-	target = target->prev_list_entry;
-
-	entry** from_list = c->available_clean_entries ? &c->available_clean_entries : &c->available_dirty_entries;;
-	remove_from_list( from_list, target );
-	free_item( target->item );
-
-	return target;
-}
 
 /*
 Puts [d] at the start of the list L
+// TODO(chris): check whether the start of the list is the best place
 
 [a] <--> [b] <--> [c] <--> [a]
           L
@@ -129,6 +111,7 @@ L prev next = d
 static void insert_into_list( entry** list, entry* element ) {
 
 	// could be NULL
+	// TODO(chris): explain why, and is that a good idea?
 	assert( element );
 	assert( *list != element );
 	
@@ -146,6 +129,26 @@ static void insert_into_list( entry** list, entry* element ) {
 		(*list)->prev_list_entry->next_list_entry = element;
 	}
 
+}
+
+static void remove_from_bucket( entry** bucket, entry* element ) {
+	
+	assert( *bucket );
+	assert( element );
+	
+	// only element in the bucket
+	if( element->next_bucket_entry == element ) {
+		*bucket = NULL;
+	} else {
+		element->prev_bucket_entry->next_bucket_entry = element->next_bucket_entry;
+		element->next_bucket_entry->prev_bucket_entry = element->prev_bucket_entry;
+		
+		// if the bucket pointed at this one, move that along
+		if( *bucket == element ) {
+			*bucket = element->next_bucket_entry;
+		}
+	}
+	
 }
 
 /*
@@ -180,6 +183,28 @@ static void insert_into_bucket( entry** b, entry* element ) {
 	}
 	
 }
+
+
+// remove and return the oldest item from the clean (preferred) or dirty entry list
+static entry* get_available_entry( cache* c ) {
+	
+	entry* target = c->available_clean_entries ? c->available_clean_entries : c->available_dirty_entries;
+
+	// nothing available in either the clean entries or dirty entries list
+	if( target == NULL ) {
+		return NULL;
+	}
+
+	// move to the oldest one
+	target = target->prev_list_entry;
+
+	entry** from_list = c->available_clean_entries ? &c->available_clean_entries : &c->available_dirty_entries;;
+	remove_from_list( from_list, target );
+	free_item( target->item );
+
+	return target;
+}
+
 
 static cache* new_cache() {
 	
@@ -347,7 +372,9 @@ static void add_item( cache* c, item* i ) {
 		
 		printf("Recycled an available item (%d)\n", available_entry->item == NULL ? -1 : available_entry->item->id );
 		int old_bucket = available_entry->key % CACHE_SIZE;
-		remove_from_bucket( &c->buckets[old_bucket], available_entry );
+		if( c->buckets[b] ) {
+			remove_from_bucket( &c->buckets[old_bucket], available_entry );
+		}
 		dump( c );
 		set_entry( available_entry, i );
 		insert_into_bucket( &c->buckets[b], available_entry );
