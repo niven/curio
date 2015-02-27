@@ -166,7 +166,6 @@ Puts [c] at the end of bucket
 */
 static void insert_into_bucket( entry** b, entry* element ) {
 
-	printf("b=%p, *b=%p\n", b, *b);
 	if( *b == NULL ) {
 		// first item in this bucket
 		*b = element;
