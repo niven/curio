@@ -371,7 +371,7 @@ static void add_item( cache* c, item* i ) {
 		
 		printf("Recycled an available item (%d)\n", available_entry->item == NULL ? -1 : available_entry->item->id );
 		int old_bucket = available_entry->key % CACHE_SIZE;
-		if( c->buckets[b] ) {
+		if( c->buckets[old_bucket] ) {
 			remove_from_bucket( &c->buckets[old_bucket], available_entry );
 		}
 		dump( c );
@@ -436,8 +436,10 @@ static void test_add_release() {
 		foo->value = rand() % 128;
 		foo->is_dirty = rand() % 2 == 0;
 		add_item( store, foo );
+		printf("After insert\n");
 		dump( store );
 		release_item( store, foo );
+		printf("After release\n");
 		dump( store );
 	}
 	
@@ -477,9 +479,9 @@ int main() {
 	
 	srand( (unsigned int)time(NULL) );
 
-	// test_empty();
-	// test_add();
-	test_add_release();
+	 //test_empty();
+	 //test_add();
+	 test_add_release();
 	// test_revive();
 
 }
