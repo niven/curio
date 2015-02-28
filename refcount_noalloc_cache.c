@@ -371,10 +371,11 @@ static void add_item( cache* c, item* i ) {
 		
 		printf("Recycled an available item (%d)\n", available_entry->item == NULL ? -1 : available_entry->item->id );
 		int old_bucket = available_entry->key % CACHE_SIZE;
-		if( c->buckets[old_bucket] ) {
+		printf("Old item was in bucket %d\n", old_bucket);
+		// check there was an old item (and not one tak)
+		if( available_entry->item &&	c->buckets[old_bucket] ) {
 			remove_from_bucket( &c->buckets[old_bucket], available_entry );
 		}
-		dump( c );
 		set_entry( available_entry, i );
 		insert_into_bucket( &c->buckets[b], available_entry );
 
@@ -463,8 +464,10 @@ static void test_revive() {
 		add_item( store, foos[i] );
 		release_item( store, foos[i] );
 	}
+	printf("After filling the cache\n");
 	dump( store );
 	for(int i=0; i<CACHE_SIZE; i++) {
+		printf("Reviving item %d\n", i);
 		item* f = get_item( store, foos[i]->id );
 		assert( f );
 		assert( f == foos[i] );
@@ -479,10 +482,10 @@ int main() {
 	
 	srand( (unsigned int)time(NULL) );
 
-	 //test_empty();
-	 //test_add();
-	 test_add_release();
-	// test_revive();
+	test_empty();
+	test_add();
+	test_add_release();
+	test_revive();
 
 }
 
