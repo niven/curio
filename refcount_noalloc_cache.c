@@ -457,10 +457,7 @@ static void test_revive() {
 
 	item* foos[CACHE_SIZE];
 	for(int i=0; i<CACHE_SIZE; i++) {
-		foos[i] = (item*) malloc( sizeof(item) );
-		foos[i]->id = i;
-		foos[i]->value = rand() % 128;
-		foos[i]->is_dirty = rand() % 2 == 0;
+		foos[i] = Item( i, rand() % 256, rand() % 2 == 0 );
 		add_item( store, foos[i] );
 		release_item( store, foos[i] );
 	}
@@ -536,8 +533,8 @@ int main() {
 	srand( (unsigned int)time(NULL) );
 
 	// test_empty();
-	test_add_release();
-	// test_revive();
+	// test_add_release();
+	test_revive();
 	
 	// test_sim();
 
