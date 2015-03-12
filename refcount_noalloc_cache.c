@@ -455,10 +455,7 @@ static void test_add_release() {
 	cache* store = new_cache();
 	for(int i=0; i<CACHE_SIZE * 2; i++) {
 
-		item* foo = (item*) malloc( sizeof(item) );
-		foo->id = i;
-		foo->value = rand() % 128;
-		foo->is_dirty = rand() % 2 == 0;
+		item* foo = Item( i, rand() % 256, rand() % 2 == 0 );
 		add_item( store, foo );
 		printf("After insert\n");
 		dump( store );
@@ -559,8 +556,8 @@ int main() {
 	srand( (unsigned int)time(NULL) );
 
 	// test_empty();
-	test_add_too_many();
-	// test_add_release();
+	// test_add_too_many();
+	test_add_release();
 	// test_revive();
 	
 	// test_sim();
