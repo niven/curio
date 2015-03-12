@@ -429,26 +429,6 @@ static void test_empty() {
 	free(store);	
 }
 
-static void test_add_too_many() {
-	
-	printf("************** Test adding more items than fit ****************\n");
-	cache* store = new_cache();
-	for(int i=0; i<CACHE_SIZE*2; i++) {
-		
-		item* foo = Item( i, rand() % 128, 0);
-		add_item( store, foo );
-		dump( store );
-		release_item( store, foo );
-	}
-	
-	dump( store );
-	
-	flush_cache( store );
-	free( store );
-	
-	
-}
-
 static void test_add_release() {
 	
 	printf("************** Test adding/releasing items (so should recycle items) ****************\n");
@@ -556,7 +536,6 @@ int main() {
 	srand( (unsigned int)time(NULL) );
 
 	// test_empty();
-	// test_add_too_many();
 	test_add_release();
 	// test_revive();
 	
