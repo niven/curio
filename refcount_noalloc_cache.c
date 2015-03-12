@@ -4,6 +4,9 @@
 #include <assert.h>
 #include <time.h> // time() for srand
 
+static uint64_t item_allocs = 0;
+static uint64_t item_frees = 0;
+
 typedef char bool;
 
 #define CACHE_MEMORY_BYTES 256
@@ -21,6 +24,17 @@ typedef struct item {
 	bool is_dirty;
 
 } item;
+
+static item* Item( int id, int value, bool is_dirty ) {
+
+	item* i = (item*) malloc( sizeof(item) );
+	item_allocs++;
+	i->id = id;
+	i->value = value;
+	i->is_dirty = is_dirty;
+	
+	return i;
+}
 
 typedef struct entry {
 
@@ -71,6 +85,7 @@ static inline void free_item( item* i ) {
 	}
 
 	free( i );
+	item_frees++;
 }
 
 static void remove_from_list( entry** list, entry* element ) {
@@ -231,18 +246,27 @@ static cache* new_cache() {
 
 static void flush_cache( cache* c ) {
 
-	printf("Flushing all dirty items\n");
-	entry* current = NULL;
-	if( (current = c->available_dirty_entries) ) {
-		do {
-			if( current->refcount > 0 ) {
-				fprintf( stderr, "\tWarning: refcount not 0 for item ID = %d\n", current->item->id );
-			}			
-			free_item( current->item );
-			current = current->next_list_entry;
-		} while( current != c->available_dirty_entries );
+	printf("Flushing all items\n");
+
+	for( int i=0; i < CACHE_SIZE; i++ ) {
+
+		if( c->entries[i].item ) {
+			if( c->entries[i].refcount > 0 ) {
+				fprintf( stderr, "Warning: freeing item %d with refcount %d\n", c->entries[i].key, c->entries[i].refcount );
+			}
+			free_item( c->entries[i].item );
+		}
 	}
+
+	memset( c->buckets, 0, sizeof(c->buckets) );
+
+	// clear entries so we never have ones that accidentally have the dirty flag set
+	memset( c->entries, 0, sizeof(c->entries) );
 	
+	c->available_clean_entries = NULL;
+	c->available_dirty_entries = NULL;
+
+	// no you could reuse the thing if you wanted to. (though I don't see the use case for that)
 }
 
 static void print_entry( cache* c, entry* e ) {
@@ -405,17 +429,16 @@ static void test_empty() {
 	free(store);	
 }
 
-static void test_add() {
+static void test_add_too_many() {
 	
 	printf("************** Test adding more items than fit ****************\n");
 	cache* store = new_cache();
 	for(int i=0; i<CACHE_SIZE*2; i++) {
-
-		item* foo = (item*) malloc( sizeof(item) );
-		foo->id = i;
-		foo->value = rand() % 128;
+		
+		item* foo = Item( i, rand() % 128, 0);
 		add_item( store, foo );
 		dump( store );
+		release_item( store, foo );
 	}
 	
 	dump( store );
@@ -478,15 +501,72 @@ static void test_revive() {
 	free(store);	
 }
 
+// to keep track of unreleased items
+typedef struct item_list {
+	item* i;
+	struct item_list* next;
+} item_list;
+
+static void test_sim() {
+	
+	printf("************** Test simulating real usage ****************\n");
+	cache* store = new_cache();
+	item_list* item_queue = NULL;
+
+	int num_items = CACHE_SIZE * 2;
+	for( int i=0; i<100; i++ ) {
+		int key = rand() % num_items;
+		item* f = get_item( store, key );
+		printf("Item %d from the cache: %s\n", key, f ? "true" : "false");
+		if( !f ) {
+			f = Item( key, rand() % 256, 0 );
+			item_list* il = (item_list*)malloc( sizeof(item_list) );
+			il->i = f;
+			il->next = item_queue;
+			item_queue = il;
+			// stick it in the cache, and forget about it
+			add_item( store, f );
+		}
+		// maybe do some work and change this item with 20% chance
+		f->is_dirty = rand() % 10 < 2;
+		// maybe release some item
+		if( item_queue && rand() % 10 < 4 ) {
+			item_list* head = item_queue;
+			item* tofree = head->i;
+			item_queue = head->next;
+			free(head);
+			release_item( store, tofree );
+		}
+	}
+	dump( store );
+	// free all remaining stuff
+	while( item_queue ) {
+		item_list* head = item_queue;
+		item* tofree = head->i;
+		item_queue = head->next;
+		free(head);
+		release_item( store, tofree );
+	}
+	printf("After freeing outstanding items\n");
+	dump( store );
+	flush_cache( store );	
+	free( store );
+
+}
+
 int main() {
 	
 	srand( (unsigned int)time(NULL) );
 
-	test_empty();
-	test_add();
-	test_add_release();
-	test_revive();
+	// test_empty();
+	test_add_too_many();
+	// test_add_release();
+	// test_revive();
+	
+	// test_sim();
 
+	printf("Item allocs %llu\n", item_allocs);
+	printf("Item frees  %llu\n", item_frees);
 }
 
 
