@@ -532,11 +532,11 @@ int main() {
 	
 	srand( (unsigned int)time(NULL) );
 
-	// test_empty();
-	// test_add_release();
+	test_empty();
+	test_add_release();
 	test_revive();
 	
-	// test_sim();
+	test_sim();
 
 	printf("Item allocs %llu\n", item_allocs);
 	printf("Item frees  %llu\n", item_frees);
