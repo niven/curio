@@ -18,13 +18,13 @@ void print_array( int* a, int sz ) {
 void fill_rand( int* array, int size ) {
 	srand( time(NULL) );
 	for(int i=0; i<size; i++) {
-		array[i] = (rand() % 100) - 50;
+		array[i] = (rand() % 100) - 200;
 	}
 }
 
 // predicate to sort negative/positive
 int predicate( int n ) {
-	
+
 	return n < 0;
 
 }
@@ -33,13 +33,12 @@ int predicate( int n ) {
 void stable_partition( int* array, int sz, int (*predicate_function)(int) ) {
 	
 	int shift_index = 0;
-	while( predicate_function(array[shift_index]) ) {
+	while( shift_index < sz && predicate_function(array[shift_index]) ) {
 		shift_index++;
 	}
 
 	int index = shift_index+1;
-	int s=0;
-	while( index < sz && s++<20 ) {
+	while( index < sz ) {
 
 		// find the next number that needs to be shifted left
 		if( !predicate_function(array[index]) ) {
@@ -59,15 +58,16 @@ void stable_partition( int* array, int sz, int (*predicate_function)(int) ) {
 	}	
 }
 
+
 int main(int argc, char** argv) {
 	
 	int size = 20;
 	int arr[size];
-
+	
 	fill_rand( arr, size );
 	print_array( arr, size );
 	
 	stable_partition( arr, size, predicate );
 	print_array( arr, size );
-
+	
 }
