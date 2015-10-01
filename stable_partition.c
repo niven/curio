@@ -5,6 +5,9 @@
 #include <string.h>
 #include <time.h>
 
+#include <unistd.h>
+
+#include "benchmark.c"
 
 void print_array( int* a, int sz ) {
 
@@ -16,9 +19,9 @@ void print_array( int* a, int sz ) {
 }
 
 void fill_rand( int* array, int size ) {
-	srand( time(NULL) );
+	srand( clock() );
 	for(int i=0; i<size; i++) {
-		array[i] = (rand() % 100) - 200;
+		array[i] = (rand() % 100) - 50;
 	}
 }
 
@@ -29,7 +32,15 @@ int predicate( int n ) {
 
 }
 
+/*
 
+Input: array with integers and a predicate function that returns true/false for elements in the array
+this function partitions the array in place based on the predicate function without changing the relative
+order of the elements within the partition. (aka, it is stable).
+
+This algorithm is O(n^2) and you should never use it. @dgryksi has a better one in Go.
+
+*/
 void stable_partition( int* array, int sz, int (*predicate_function)(int) ) {
 	
 	int shift_index = 0;
@@ -58,6 +69,14 @@ void stable_partition( int* array, int sz, int (*predicate_function)(int) ) {
 	}	
 }
 
+void partition_benchmark( void* params ) {
+	uint64_t count = (uint64_t) params;
+
+	int arr[count];
+	
+	fill_rand( arr, count );
+	stable_partition( arr, count, predicate );
+}
 
 int main(int argc, char** argv) {
 	
@@ -69,5 +88,13 @@ int main(int argc, char** argv) {
 	
 	stable_partition( arr, size, predicate );
 	print_array( arr, size );
+	
+	char buf[255];
+	for( uint64_t i=10; i<1*1000*1000; i*=1.2) {
+		sprintf( buf, "%llu", i );
+		benchmark b = run_benchmark( buf, partition_benchmark, (void*)i );
+		printf("%s\t%.10f\ts/run\t%llu runs\n", b.name, b.average_seconds, b.runs );
+	}
+	
 	
 }
