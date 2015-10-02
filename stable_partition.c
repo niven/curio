@@ -69,6 +69,87 @@ void stable_partition( int* array, int sz, int (*predicate_function)(int) ) {
 	}	
 }
 
+void flip( int* from, int* to ) {
+	// printf("Flipping from %d to %d\n", *from, *to );
+	
+	if( from == to ) {
+		return;
+	}
+	
+	int temp;
+	while( from < to ) {
+		temp = *from;
+		*from = *to;
+		*to = temp;
+		from++;
+		to--;
+	}
+	
+}
+
+void stable_partition_merge( int* array, int sz, int (*predicate_function)(int) ) {
+	
+	// printf("sz: %d\n", sz);
+	// print_array( array, sz );
+	// fflush( stdout );
+	int start, mid = sz, end = -1; 
+	
+	// find the first occurence where the predicate is false (if any)
+	for( int i=0; i<sz; i++ ) {
+		if( !predicate_function( array[i] ) ) {
+			start = i;
+			break;
+		}
+	}
+	
+	if( start < sz ) {
+		// printf("Start: a[%d] = %d\n", start, array[start] );
+		// find the point where the predicate is true, if any
+		for( int i=start+1; i<sz; i++ ) {
+			if( predicate_function(array[i]) ) {
+				mid = i-1;
+				break;
+			}
+		}
+		// printf("mid: %d\n", mid);
+		if( mid < sz ) {
+			// printf("Mid: a[%d] = %d\n", mid, array[mid]);
+			// now find where the predicate stop being true
+			for( int i=mid+1; i<sz; i++ ) {
+				if( !predicate_function(array[i]) ) {
+					end = i-1;
+					break;
+				}
+			}
+			
+			if( end == -1 ) {
+				end = sz-1;
+			}
+			// printf("End: a[%d] = %d\n", end, array[end]);
+			
+			flip( array + start, array + mid );
+			// print_array( array, sz );
+			flip( array + mid + 1, array + end );
+			// print_array( array, sz );
+			flip( array + start, array + end );
+			// print_array( array, sz );
+			
+			// now we moved end-mid elements after start in the right place
+			int ok = start + (end-mid);
+			// printf("ok up to: a[%d] = %d\n", ok, array[ok] );
+			if( ok < sz ) {
+				stable_partition_merge( array + ok, sz-ok, predicate_function );
+			}
+		} else {
+			// printf("All !p\n");
+		}
+	} else {
+		// printf("Nothing to do\n");
+	}
+	
+}
+
+
 void partition_benchmark( void* params ) {
 	uint64_t count = (uint64_t) params;
 
@@ -78,22 +159,48 @@ void partition_benchmark( void* params ) {
 	stable_partition( arr, count, predicate );
 }
 
+void partition_benchmark2( void* params ) {
+	uint64_t count = (uint64_t) params;
+
+	int arr[count];
+	
+	fill_rand( arr, count );
+	stable_partition_merge( arr, count, predicate );
+}
+
+// int verify_partition
+
 int main(int argc, char** argv) {
 	
-	int size = 20;
+	int size = 5000;
 	int arr[size];
+	int cpy[size];
 	
+	int t[] = {4, 45, 18, 2, 21, 14, 24, 26, 20};
+	stable_partition_merge( t, sizeof(t)/sizeof(t[0]), predicate );
+	// return 0;
+	for( int i=0; i<100; i++ ) {
+		
 	fill_rand( arr, size );
+	memcpy( cpy, arr, sizeof(arr) );
+
 	print_array( arr, size );
+	printf("\n");
 	
 	stable_partition( arr, size, predicate );
 	print_array( arr, size );
+	stable_partition_merge( cpy, size, predicate );
+	print_array( cpy, size );
+	printf("\n");
+	}
 	
+	// return 0;
 	char buf[255];
-	for( uint64_t i=10; i<1*1000*1000; i*=1.2) {
+	for( uint64_t i=10; i<1000*1000; i*=2) {
 		sprintf( buf, "%llu", i );
-		benchmark b = run_benchmark( buf, partition_benchmark, (void*)i );
-		printf("%s\t%.10f\ts/run\t%llu runs\n", b.name, b.average_seconds, b.runs );
+		benchmark sp_bad = run_benchmark( buf, partition_benchmark, (void*)i );
+		benchmark sp_better = run_benchmark( buf, partition_benchmark2, (void*)i );
+		printf("%s\t%.10f\ts/run\t%.10f\ts/run\n", sp_bad.name, sp_bad.average_seconds, sp_better.average_seconds );
 	}
 	
 	
