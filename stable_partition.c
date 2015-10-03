@@ -13,10 +13,11 @@
 
 void print_array( int* a, int sz ) {
 
+	printf("[ ");
 	for( int i=0;i<sz; i++) {
 		printf("%d ", a[i] );
 	}
-	printf("\n");
+	printf("]");
 	
 }
 
@@ -28,8 +29,10 @@ void fill_rand( int* array, int size ) {
 }
 
 // predicate to sort negative/positive
+static uint32_t predicate_checks;
 int predicate( int n ) {
-
+	// printf("P(%d)\n", n);
+	predicate_checks++;
 	return n < 0;
 
 }
@@ -51,6 +54,26 @@ int verify_partition( int* array, int sz, int (*predicate_function)(int) ) {
 	}
 	
 	return 1;
+}
+
+static uint32_t flips;
+void flip( int* from, int* to ) {
+	// printf("Flipping from %d to %d\n", *from, *to );
+	
+	if( from == to ) {
+		return;
+	}
+	
+	int temp;
+	while( from < to ) {
+		flips++;
+		temp = *from;
+		*from = *to;
+		*to = temp;
+		from++;
+		to--;
+	}
+	
 }
 
 
@@ -91,43 +114,46 @@ void stable_partition( int* array, int sz, int (*predicate_function)(int) ) {
 	}	
 }
 
-void flip( int* from, int* to ) {
-	// printf("Flipping from %d to %d\n", *from, *to );
-	
-	if( from == to ) {
-		return;
-	}
-	
-	int temp;
-	while( from < to ) {
-		temp = *from;
-		*from = *to;
-		*to = temp;
-		from++;
-		to--;
-	}
-	
-}
 
-void stable_partition_flip( int* array, int sz, int (*predicate_function)(int) ) {
+/*
+This is worse than the algorithm above.
+If the partitioning should be something like XXXXXXOOOOOOOOO
+We find a subsequence of OOOOOXXX, reverse the O's, reverse the X's and then reverse the whole thing.
+Then we have the head of the array with some number of X's and call this function again with the new
+start of the array (which will be O's) and then repeat. This means we end up flipping and reflipping
+ever larger sets of O's to move them right. It's really bad. Still O(n^2) though.
+
+One useful optimization is: if you flip OOOXX then you know the next call to the function is
+s_b_f( 'OOO??????', ... ) so we pass in the mid_offset (start will be 0, mid should start somewhere after 3)
+*/
+void stable_partition_flip( int* array, int sz, int (*predicate_function)(int), int mid_offset ) {
 	
-	// printf("sz: %d\n", sz);
-	// print_array( array, sz );
-	// fflush( stdout );
-	int start, mid = sz, end = -1; 
+	// print_array( array, sz ); printf("\n");
+	// printf("Mid offset: %d\n", mid_offset);
+	int start, mid_start, mid = sz, end = -1; 
 	
-	// find the first occurence where the predicate is false (if any)
-	for( int i=0; i<sz; i++ ) {
-		if( !predicate_function( array[i] ) ) {
-			start = i;
-			break;
+	if( mid_offset == 0 ) {
+
+		// find the first occurence where the predicate is false (if any)
+		for( int i=0; i<sz; i++ ) {
+			if( !predicate_function( array[i] ) ) {
+				start = i;
+				break;
+			}
 		}
+		
+		mid_start = start+1;
+		
+	} else {
+		start = 0;
+		mid_start = mid_offset;
 	}
 	
 	if( start < sz ) {
 		// printf("Start: a[%d] = %d\n", start, array[start] );
 		// find the point where the predicate is true, if any
-		for( int i=start+1; i<sz; i++ ) {
+		for( int i=mid_start; i<sz; i++ ) {
+			// printf("Checking for mid: a[%d] = %d\n", i, array[i]);
 			if( predicate_function(array[i]) ) {
 				mid = i-1;
 				break;
@@ -160,7 +186,7 @@ void stable_partition_flip( int* array, int sz, int (*predicate_function)(int) )
 			int ok = start + (end-mid);
 			// printf("ok up to: a[%d] = %d\n", ok, array[ok] );
 			if( ok < sz ) {
-				stable_partition_flip( array + ok, sz-ok, predicate_function );
+				stable_partition_flip( array + ok, sz-ok, predicate_function, mid-start+1 );
 			}
 		} else {
 			// printf("All !p\n");
@@ -172,6 +198,69 @@ void stable_partition_flip( int* array, int sz, int (*predicate_function)(int) )
 }
 
 
+/*
+Find a subsequence OOOOXX in the array
+*/
+inline static void find_subsequence( int* array, int sz, int (*predicate_function)(int), int start, int* mid, int* end ) {
+	
+	*mid = start + 1;
+
+	while( *mid < sz && !predicate_function( array[*mid] ) ) {
+		(*mid)++;
+	}
+	
+	*end = 1 + *mid;
+	while( *end < sz && predicate_function( array[*end] ) ) {
+		(*end)++;
+	}
+
+}
+
+/*
+
+This is essentially the same as the move algorithm except now we flip.
+
+The upside is that predicate_function is called exactly once for each element of the array
+*/
+void stable_partition_flip2( int* array, int sz, int (*predicate_function)(int) ) {
+	
+	int start = 0, mid = 0, end = 0;
+	int offset = 0;
+
+	// first, skip all the elements at the beginnig that are ok
+	for( int i=0; i<sz; i++ ) {
+		if( !predicate_function( array[i] ) ) {
+			start = i;
+			break;
+		}
+	}
+
+	while( 1 ) {
+	
+		// find the next sequence, except we can start ahead if we previously moved some !p forward
+		find_subsequence( array, sz, predicate_function, start + offset, &mid, &end );
+	
+		if( mid < sz ) {		
+
+	
+			flip( array + start, array + mid - 1 );
+			flip( array + mid, array + end - 1 );
+			flip( array + start, array + end - 1 );
+
+			offset = mid - start;
+			start += end - mid;
+
+		} else {
+			break;
+		}
+
+	} 
+			
+	
+}
+
+static int global_do_verify = 0;
+
 void partition_benchmark( void* params ) {
 	uint64_t count = (uint64_t) params;
 
@@ -179,7 +268,7 @@ void partition_benchmark( void* params ) {
 	
 	fill_rand( arr, count );
 	stable_partition( arr, count, predicate );
-	if( !verify_partition( arr, count, predicate ) ) {
+	if( global_do_verify && !verify_partition( arr, count, predicate ) ) {
 		printf("FAIL!\n");
 		print_array( arr, count );
 		abort();
@@ -192,8 +281,22 @@ void partition_benchmark2( void* params ) {
 	int arr[count];
 	
 	fill_rand( arr, count );
-	stable_partition_flip( arr, count, predicate );
-	if( !verify_partition( arr, count, predicate ) ) {
+	stable_partition_flip( arr, count, predicate, 0 );
+	if( global_do_verify && !verify_partition( arr, count, predicate ) ) {
+		printf("FAIL!\n");
+		print_array( arr, count );
+		abort();
+	}
+}
+
+void partition_benchmark3( void* params ) {
+	uint64_t count = (uint64_t) params;
+
+	int arr[count];
+	
+	fill_rand( arr, count );
+	stable_partition_flip2( arr, count, predicate );
+	if( global_do_verify && !verify_partition( arr, count, predicate ) ) {
 		printf("FAIL!\n");
 		print_array( arr, count );
 		abort();
@@ -203,18 +306,31 @@ void partition_benchmark2( void* params ) {
 
 int main(int argc, char** argv) {
 	
-	int bad[] = { -3, -5, 4, 6, -3 };
-	int good[] = { -3, -5, 4, 6, 10 };
-	assert( verify_partition(bad, ARRAY_COUNT(bad), predicate ) == 0 );
-	assert( verify_partition(good, ARRAY_COUNT(good), predicate ) == 1 );
+	// int bad[] = { -3, -5, 4, 6, -3 };
+	// int good[] = { -3, -5, 4, 6, 10 };
+	// assert( verify_partition(bad, ARRAY_COUNT(bad), predicate ) == 0 );
+	// assert( verify_partition(good, ARRAY_COUNT(good), predicate ) == 1 );
 	
+	int sz = 10;
+	// int arr[] = { -1, 1, -2, 2, -3, 3, -4, 4, -5, 5 };
+	int arr[sz];
+	fill_rand( arr, sz );
+	print_array( arr, sz ); printf("\n");
+	flips = 0; predicate_checks = 0;
+	stable_partition_flip2( arr, sz, predicate );
+	print_array( arr, sz ); printf("\n");
+	int oldp = predicate_checks;
+	printf("Ok: %d\tFlips: %u\tPreds: %u\n", verify_partition(arr, sz, predicate), flips, predicate_checks-oldp );
+	
+	// return 0;
 	char buf[255];
-	printf("N\tmove\t\tflip\n");
+	printf("N\tmove\t\tflip\t\tflip2\n");
 	for( uint64_t i=10; i<1000*1000; i*=2) {
 		sprintf( buf, "%llu", i );
-		benchmark sp_bad = run_benchmark( buf, partition_benchmark, (void*)i );
-		benchmark sp_better = run_benchmark( buf, partition_benchmark2, (void*)i );
-		printf("%s\t%.10f\t%.10f\t\n", sp_bad.name, sp_bad.average_seconds, sp_better.average_seconds );
+		benchmark sp_move = run_benchmark( buf, partition_benchmark, (void*)i );
+		benchmark sp_flip = run_benchmark( buf, partition_benchmark2, (void*)i );
+		benchmark sp_flip2 = run_benchmark( buf, partition_benchmark3, (void*)i );
+		printf("%s\t%.10f\t%.10f\t%.10f\n", sp_move.name, sp_move.average_seconds, sp_flip.average_seconds, sp_flip2.average_seconds );
 	}
 	
 	
