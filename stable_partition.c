@@ -259,6 +259,48 @@ void stable_partition_flip2( int* array, int sz, int (*predicate_function)(int) 
 	
 }
 
+// Damian does up to, mine does including so we -1 the endpoint
+inline static void Reverse( int* array, int from, int to ) {
+	flip( array + from, array + to - 1 );
+}
+
+inline static int Rotate(int* array, int f, int k, int l) {
+	// printf("Rotate %d-%d-%d\nBefore: ", f, k, l);
+	// print_array( array + f, l-f ); printf("\n");
+	Reverse(array, f, k);
+	Reverse(array, k, l);
+	Reverse(array, f, l);
+	// printf("After: "); print_array( array + f, l-f ); printf("\n");
+	return f + l - k;
+}
+
+int stable_partition_dryski(int* array, int first, int last, int (*predicate_function)(int) ) {
+
+	// print_array( array + first, last-first ); printf("\n");
+	int span = last - first;
+	
+	if( span == 0 ) {
+		return first;
+	}
+
+	if( span == 1 ) {
+		int r = first;
+		if( predicate_function( array[first] ) ) {
+			r++;
+		}
+		return r;
+	}
+
+	int mid = first + span/2;
+
+	return Rotate(
+				array, 
+				stable_partition_dryski(array, first, mid, predicate_function), 
+				mid, 
+				stable_partition_dryski(array, mid, last, predicate_function)
+			);
+}
+
 static int global_do_verify = 0;
 
 void partition_benchmark( void* params ) {
@@ -303,6 +345,20 @@ void partition_benchmark3( void* params ) {
 	}
 }
 
+void partition_benchmark4( void* params ) {
+	uint64_t count = (uint64_t) params;
+
+	int arr[count];
+	
+	fill_rand( arr, count );
+	stable_partition_dryski( arr, 0, count, predicate );
+	if( global_do_verify && !verify_partition( arr, count, predicate ) ) {
+		printf("FAIL!\n");
+		print_array( arr, count );
+		abort();
+	}
+}
+
 
 int main(int argc, char** argv) {
 	
@@ -317,20 +373,21 @@ int main(int argc, char** argv) {
 	fill_rand( arr, sz );
 	print_array( arr, sz ); printf("\n");
 	flips = 0; predicate_checks = 0;
-	stable_partition_flip2( arr, sz, predicate );
+	stable_partition_dryski( arr, 0, sz, predicate );
 	print_array( arr, sz ); printf("\n");
 	int oldp = predicate_checks;
 	printf("Ok: %d\tFlips: %u\tPreds: %u\n", verify_partition(arr, sz, predicate), flips, predicate_checks-oldp );
 	
 	// return 0;
 	char buf[255];
-	printf("N\tmove\t\tflip\t\tflip2\n");
+	printf("N\tmove\t\tflip\t\tflip2\t\tdgryski\n");
 	for( uint64_t i=10; i<1000*1000; i*=2) {
 		sprintf( buf, "%llu", i );
 		benchmark sp_move = run_benchmark( buf, partition_benchmark, (void*)i );
 		benchmark sp_flip = run_benchmark( buf, partition_benchmark2, (void*)i );
 		benchmark sp_flip2 = run_benchmark( buf, partition_benchmark3, (void*)i );
-		printf("%s\t%.10f\t%.10f\t%.10f\n", sp_move.name, sp_move.average_seconds, sp_flip.average_seconds, sp_flip2.average_seconds );
+		benchmark sp_dgryski = run_benchmark( buf, partition_benchmark4, (void*)i );
+		printf("%s\t%.10f\t%.10f\t%.10f\t%.10f\n", sp_move.name, sp_move.average_seconds, sp_flip.average_seconds, sp_flip2.average_seconds, sp_dgryski.average_seconds );
 	}
 	
 	
