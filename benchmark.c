@@ -6,8 +6,11 @@ typedef struct benchmark {
 	const char* name;
 	uint64_t cpu_time_spent;
 	uint32_t runs;
+	char byte_alignment_padding[4];
 	double average_seconds;
 } benchmark;
+
+benchmark run_benchmark( const char* name, void (*function)(void*), void *params );
 
 benchmark run_benchmark( const char* name, void (*function)(void*), void *params ) {
 	
