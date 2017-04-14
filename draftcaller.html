@@ -3,7 +3,36 @@
 
 <script type="text/javascript">
 
+	var audio_files = {
+		"ten_seconds_left": "ten_seconds_left.wav",
+		"five_seconds_left": "five_seconds_left.wav",
+		"draft": "draft.wav",
+		"review_start": "review_start.wav",
+		"review_end": "review_end.wav",
+		"pause": "pause.wav",
+		"resume": "resume.wav"
+	};
+	
+	function load_audio( audio_dict, audio_base_path, files ) {
+	
+		Object.keys(files).forEach( function(el, idx, arr) {
+	
+			audio_dict[el] = new Audio(audio_base_path + files[el] );
+	
+		});
+	
+	}
+	function play_audio( name ) {
+		console.log("playing " + name );
+
+		["duration", "readyState", "currentTime", "error", "muted", "paused", "ended"].forEach( function(el, id, arr) {
+			console.log( el + " = " + state.audio[name][el] );
+		});
+		state.audio[name].play();
+	}
+
 	var state = {
+		"audio": {},
 		"status": "init",
 		"num_boosters": -1,
 		"first_time": -1,
@@ -26,13 +55,21 @@
 		
 		if( state.status == "reviewing" && state.time_elapsed_ms >= state.time_for_pick_ms ) {
 			state.status = "picking";
+			play_audio( "review_end" );
 		}
 
 		if( state.status == "picking" ) {
-			if( state.time_for_pick_ms - state.time_elapsed_ms  < 5*1000 ) {
-				document.getElementById("bd").setAttribute("class", "urgent_red");
-			} else if( state.time_for_pick_ms - state.time_elapsed_ms  < 10*1000 ) {
-				document.getElementById("bd").setAttribute("class", "urgent_orange");
+			
+			if( state.time_for_pick_ms - state.time_elapsed_ms < 5*1000 ) {
+				if( document.getElementById("bd").getAttribute("class") != "urgent_red" ) {
+					play_audio( "five_seconds_left" );									
+					document.getElementById("bd").setAttribute("class", "urgent_red");
+				}
+			} else if( (state.time_for_pick_ms - state.time_elapsed_ms < 10*1000) ) {
+				if( document.getElementById("bd").getAttribute("class") != "urgent_orange" ) {
+					document.getElementById("bd").setAttribute("class", "urgent_orange");
+					play_audio( "ten_seconds_left" );									
+				}
 			} else {
 				document.getElementById("bd").setAttribute("class", "");
 			}
@@ -47,6 +84,7 @@
 			state.time_elapsed_ms = 0;
 			state.time_start_ms = Date.now();
 			log("Pick Card " + state.current_card );
+			play_audio( "draft" );
 		}
 		
 		if( state.current_card == 3 && state.current_booster <= state.num_boosters-1 ) {
@@ -57,6 +95,7 @@
 			state.time_for_pick_ms = 1000 * state.review_time;
 			log("Review " + state.review_time + "sec, then open booster " + (1+state.current_booster) );
 			state.status = "reviewing";
+			play_audio( "review_start" );
 		}
 		
 		if( state.current_booster == state.num_boosters ) {
@@ -128,9 +167,11 @@
 		if( state.status == "picking" || state.status == "reviewing" ) {
 			state.old_status = state.status;
 			state.status = "paused";
+			play_audio( "pause" );
 		} else if( state.status == "paused" ) {
 			state.time_start_ms = Date.now();
 			state.status = state.old_status;
+			play_audio( "resume" );
 		}
 	}
 	
@@ -142,7 +183,8 @@
 		timespan.textContent = (minutes < 10 ? "0" + minutes : minutes)+ ":" + (seconds < 10 ? "0" + seconds : seconds); 
 	}
 
-	function go() {
+	function preload_audio() {
+		load_audio( state.audio, "", audio_files );
 	}
 
 </script>
@@ -214,7 +256,7 @@
 		}
 	</style>
 
-<body onload="go();" id="bd">
+<body onload="preload_audio();" id="bd">
 	
 	<div id="setup">
 		Boosters: <input type="text" id="num_boosters" value="3"></input> 
@@ -222,7 +264,7 @@
 		Last Card Time: <input type="text" id="last_time" value="5"></input>
 		Review Time: <input type="text" id="review_time" value="10"></input>
 	<br>
-	<button onclick="start();">Start</button>
+	<button onclick="start();">Start</button>	<button onclick="play_audio('draft');">DRAFT</button>
 
 	</div>
 
