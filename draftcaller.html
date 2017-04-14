@@ -1,0 +1,240 @@
+<html>
+<meta charset="utf-8">
+
+<script type="text/javascript">
+
+	var state = {
+		"status": "init",
+		"num_boosters": -1,
+		"first_time": -1,
+		"last_time": -1,
+		"review_time": -1,
+		"time_elapsed": 0
+	};
+
+	var c = 0;
+	var interval_id = -1;
+
+	function log( msg ) {
+		var span = document.createElement("span");
+		span.textContent = msg;
+		var log = document.getElementById("log");
+		log.insertBefore( span, log.firstChild );
+	}
+	
+	function advance_state() {
+		
+		if( state.status == "reviewing" && state.time_elapsed_ms >= state.time_for_pick_ms ) {
+			state.status = "picking";
+		}
+
+		if( state.status == "picking" ) {
+			if( state.time_for_pick_ms - state.time_elapsed_ms  < 5*1000 ) {
+				document.getElementById("bd").setAttribute("class", "urgent_red");
+			} else if( state.time_for_pick_ms - state.time_elapsed_ms  < 10*1000 ) {
+				document.getElementById("bd").setAttribute("class", "urgent_orange");
+			} else {
+				document.getElementById("bd").setAttribute("class", "");
+			}
+		} else {
+			document.getElementById("bd").setAttribute("class", state.status);
+		}
+		
+		
+		if( state.time_elapsed_ms >= state.time_for_pick_ms ) {
+			state.current_card++;
+			state.time_for_pick_ms = 1000 * lerp( state.first_time, state.last_time, state.current_card / 15 );
+			state.time_elapsed_ms = 0;
+			state.time_start_ms = Date.now();
+			log("Pick Card " + state.current_card );
+		}
+		
+		if( state.current_card == 3 && state.current_booster <= state.num_boosters-1 ) {
+			state.current_booster++;
+			state.current_card = 0;
+			state.time_elapsed_ms = 0;
+			state.time_start_ms = Date.now();
+			state.time_for_pick_ms = 1000 * state.review_time;
+			log("Review " + state.review_time + "sec, then open booster " + (1+state.current_booster) );
+			state.status = "reviewing";
+		}
+		
+		if( state.current_booster == state.num_boosters ) {
+			state.status = "done";
+			document.getElementById("bd").setAttribute("class", state.status);
+		}
+	}
+
+	function twiddle() {
+
+		switch( state.status ) {
+			case "reviewing":
+			case "picking": {
+				// update the timer
+				var now = Date.now();
+				state.time_elapsed_ms += now - state.time_start_ms;
+				state.time_start_ms = now;
+
+				var time_sec = Math.ceil( (state.time_for_pick_ms - state.time_elapsed_ms) / 1000 );
+				set_timer( time_sec );
+				
+				advance_state();
+				
+				break;
+			}
+			case "paused": {
+				// do nothing!
+				break;
+			}
+			case "done": {
+				log("Done!");
+				clearInterval( interval_id );
+				break;
+			}
+		default:
+			log("Broken state! " + status );
+		}
+	}
+	
+	// t = [0,1]
+	function lerp( interval_start, interval_end, t ) {
+		// console.log( "lerp( " + interval_start + ", " + interval_end + ", " + t + ") = " + (interval_end + (1-t) * (interval_start-interval_end)) );
+		return interval_end + ( (1-t) * (interval_start-interval_end) );
+	}
+	
+	function start() {
+		
+		["num_boosters","first_time","last_time","review_time"].forEach( function(el, id, arr) {
+			state[ el ] = parseInt( document.getElementById( el ).value );
+		});
+		
+		state.current_booster = 0;
+		state.current_card = 0;
+		state.time_for_pick_ms = 1000 * lerp( state.first_time, state.last_time, state.current_card / 15 );				
+
+		state.time_elapsed_ms = 0;
+		state.time_start_ms = Date.now();
+		state.status = "picking";
+		
+		console.log( state );
+				
+		interval_id = setInterval( twiddle, 250 );
+		
+		document.getElementById("main").style.display = "block";
+		document.getElementById("setup").style.display = "none";
+	}
+	
+	function pause_resume() {
+		if( state.status == "picking" || state.status == "reviewing" ) {
+			state.old_status = state.status;
+			state.status = "paused";
+		} else if( state.status == "paused" ) {
+			state.time_start_ms = Date.now();
+			state.status = state.old_status;
+		}
+	}
+	
+	function set_timer( sec ) {
+		var minutes = Math.floor( sec / 60 );
+		var seconds = sec - 60*minutes;
+		
+		var timespan = document.getElementById("timer");
+		timespan.textContent = (minutes < 10 ? "0" + minutes : minutes)+ ":" + (seconds < 10 ? "0" + seconds : seconds); 
+	}
+
+	function go() {
+	}
+
+</script>
+	
+	<style type="text/css">
+		
+		* {
+			font-size: large;
+		}
+		
+		#log {
+			margin: 0 auto;
+			padding: 1em;
+			border: solid thin black;
+			height: 50%;
+			width: 50%;
+			overflow: auto;
+			background-color: oldlace;
+			color: black;
+		}
+		
+		#log span {
+			display: block;
+			font-size: 24pt;
+		}
+		
+		#timer {
+			width: 50%;
+			text-align: center;
+			display: block;
+			margin: 0 auto;
+			font-size: 80pt;
+			font-weight: bold;
+		}
+		
+		#pause_resume {
+			display: block;
+			margin: 1% auto;
+		}
+		
+		.urgent_red {
+			background-color: red;
+			color: white;
+		}
+		.urgent_orange {
+			background-color: orange;
+			color: black;
+		}
+		.reviewing {
+			background-color: cornflowerblue;
+			color: black;
+		}
+		.done {
+			background-color: forestgreen;
+			color: black;
+		}
+		
+		#main {
+			display: none;
+		}
+		
+		button {
+			padding: 1em;
+			font-size: xx-large;
+		}
+		
+		input {
+			width: 3em;
+		}
+	</style>
+
+<body onload="go();" id="bd">
+	
+	<div id="setup">
+		Boosters: <input type="text" id="num_boosters" value="3"></input> 
+		First card time: <input type="text" id="first_time" value="12"></input>
+		Last Card Time: <input type="text" id="last_time" value="5"></input>
+		Review Time: <input type="text" id="review_time" value="10"></input>
+	<br>
+	<button onclick="start();">Start</button>
+
+	</div>
+
+	<div id="main">
+	
+		<span id="timer"/>00:00</span>
+		<p id="log"></p>
+	
+		<button onclick="pause_resume();" id="pause_resume">Pause/Resume</button>
+	
+	</div>
+	
+</body>
+
+</html>
