@@ -94,7 +94,7 @@
 		"time_elapsed": 0
 	};
 
-	var interval_id = -1;
+	var main_loop_interval_id = -1;
 
 	function log( msg ) {
 		var span = document.createElement("span");
@@ -184,7 +184,7 @@
 			}
 			case "done": {
 				log("Done!");
-				clearInterval( interval_id );
+				clearInterval( main_loop_interval_id );
 				break;
 			}
 		default:
@@ -215,7 +215,7 @@
 		state.time_start_ms = Date.now();
 		state.status = "picking";
 		
-		interval_id = setInterval( twiddle, 250 );
+		main_loop_interval_id = setInterval( twiddle, 250 );
 		
 		document.getElementById("main").style.display = "block";
 		document.getElementById("setup").style.display = "none";
