@@ -3,6 +3,27 @@
 
 <script type="text/javascript">
 
+	var CONSTANTS = {
+		"cards_per_booster": 2,
+		"num_boosters": 5,
+		"first_time": 7,
+		"last_time": 3,
+		"review_time": 6
+	}
+
+	function initialize() {
+		// set some of the form values
+		Object.keys(CONSTANTS).forEach( function( el, idx, arr) {
+			var domEl = document.getElementById( el );
+			if( domEl && domEl.tagName == "INPUT" && domEl.type == "text") {
+				domEl.value = CONSTANTS[el];
+			}
+		});
+		
+		// preload audio
+		load_audio( state.audio, "", audio_files );
+	}
+
 	var audio_files = {
 		"ten_seconds_left": "ten_seconds_left.wav",
 		"five_seconds_left": "five_seconds_left.wav",
@@ -21,11 +42,13 @@
 	
 	}
 	function play_audio( name ) {
+		/*
 		console.log("playing " + name );
 
 		["duration", "readyState", "currentTime", "error", "muted", "paused", "ended"].forEach( function(el, id, arr) {
 			console.log( el + " = " + state.audio[name][el] );
 		});
+		*/
 		state.audio[name].play();
 	}
 
@@ -77,14 +100,14 @@
 		
 		if( state.status == "picking" && state.time_elapsed_ms >= state.time_for_pick_ms ) {
 			state.current_card++;
-			state.time_for_pick_ms = 1000 * lerp( state.first_time, state.last_time, state.current_card / 15 );
+			state.time_for_pick_ms = 1000 * lerp( state.first_time, state.last_time, state.current_card / CONSTANTS["cards_per_booster"] );
 			state.time_elapsed_ms = 0;
 			state.time_start_ms = Date.now();
 			log("Pick Card " + state.current_card );
 			play_audio( "draft" );
 		}
 		
-		if( state.current_card == 3 && state.current_booster <= state.num_boosters-1 ) {
+		if( state.current_card == CONSTANTS["cards_per_booster"] && state.current_booster <= state.num_boosters-1 ) {
 			state.current_booster++;
 			state.current_card = 0;
 			state.time_elapsed_ms = 0;
@@ -140,8 +163,11 @@
 	
 	function start() {
 		
-		["num_boosters","first_time","last_time","review_time"].forEach( function(el, id, arr) {
-			state[ el ] = parseInt( document.getElementById( el ).value );
+		Object.keys(CONSTANTS).forEach( function(el, id, arr) {
+			var domEl = document.getElementById( el );
+			if( domEl && domEl.tagName == "INPUT" && domEl.type == "text") {
+				state[ el ] = parseInt( domEl.value );
+			}
 		});
 		
 		state.current_booster = 0;
@@ -152,8 +178,6 @@
 		state.time_start_ms = Date.now();
 		state.status = "picking";
 		
-		console.log( state );
-				
 		interval_id = setInterval( twiddle, 250 );
 		
 		document.getElementById("main").style.display = "block";
@@ -179,11 +203,6 @@
 		var timespan = document.getElementById("timer");
 		timespan.textContent = (minutes < 10 ? "0" + minutes : minutes)+ ":" + (seconds < 10 ? "0" + seconds : seconds); 
 	}
-
-	function preload_audio() {
-		load_audio( state.audio, "", audio_files );
-	}
-
 </script>
 	
 	<style type="text/css">
@@ -253,7 +272,7 @@
 		}
 	</style>
 
-<body onload="preload_audio();" id="bd">
+<body onload="initialize();" id="bd">
 	
 	<div id="setup">
 		Boosters: <input type="text" id="num_boosters" value="3"></input> 
