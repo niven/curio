@@ -16,9 +16,7 @@
 	function load_audio( audio_dict, audio_base_path, files ) {
 	
 		Object.keys(files).forEach( function(el, idx, arr) {
-	
 			audio_dict[el] = new Audio(audio_base_path + files[el] );
-	
 		});
 	
 	}
@@ -41,7 +39,6 @@
 		"time_elapsed": 0
 	};
 
-	var c = 0;
 	var interval_id = -1;
 
 	function log( msg ) {
@@ -78,7 +75,7 @@
 		}
 		
 		
-		if( state.time_elapsed_ms >= state.time_for_pick_ms ) {
+		if( state.status == "picking" && state.time_elapsed_ms >= state.time_for_pick_ms ) {
 			state.current_card++;
 			state.time_for_pick_ms = 1000 * lerp( state.first_time, state.last_time, state.current_card / 15 );
 			state.time_elapsed_ms = 0;
