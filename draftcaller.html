@@ -4,11 +4,11 @@
 <script type="text/javascript">
 
 	var CONSTANTS = {
-		"cards_per_booster": 2,
-		"num_boosters": 5,
-		"first_time": 7,
-		"last_time": 3,
-		"review_time": 6
+		"cards_per_booster": 3,
+		"num_boosters": 6,
+		"first_time": 11,
+		"last_time": 10,
+		"review_time": 20
 	}
 
 	function initialize() {
@@ -27,6 +27,7 @@
 	var audio_files = {
 		"ten_seconds_left": "ten_seconds_left.wav",
 		"five_seconds_left": "five_seconds_left.wav",
+		"draft_and_pass": "draft_and_pass.wav",
 		"draft": "draft.wav",
 		"review_start": "review_start.wav",
 		"review_end": "review_end.wav",
@@ -41,16 +42,47 @@
 		});
 	
 	}
-	function play_audio( name ) {
-		/*
-		console.log("playing " + name );
 
-		["duration", "readyState", "currentTime", "error", "muted", "paused", "ended"].forEach( function(el, id, arr) {
-			console.log( el + " = " + state.audio[name][el] );
-		});
-		*/
-		state.audio[name].play();
+	var audio_queue = [];
+	var audio_play_interval_id = -1;
+	function play_audio( name ) {
+		
+		console.log("play_audio(): ", audio_queue, name );
+
+		if( audio_play_interval_id == -1 ) {
+			audio_play_interval_id = setInterval( play_audio, 100 );
+		}
+		
+		if( name == undefined ) {
+			// audio queue playback loop
+			if( audio_queue.length > 0 ) {
+				var current_clip = state.audio[ audio_queue[0] ];
+
+				if( current_clip.currentTime > 0 ) { // it's playing or ended
+					
+					if( current_clip.ended ) {
+						// remove the clip that has ended
+						audio_queue.shift();
+						current_clip.pause(); // need to pause before resetting the time, otherwise it's sometimes a seek
+						current_clip.currentTime = 0;
+					}
+					// no need to immediately play the next one, it will happen next time around
+				} else {
+					// nothing playing, but something in the queue -> play it!
+					current_clip.play();
+				}
+			} else {
+				// nothing in the queue, might as well not run the loop
+				clearInterval( audio_play_interval_id );
+				audio_play_interval_id = -1;
+			}
+		} else {
+			// enqueue a new audio clip
+			audio_queue.push( name );
+		}
+
 	}
+
 
 	var state = {
 		"audio": {},
@@ -76,6 +108,7 @@
 		if( state.status == "reviewing" && state.time_elapsed_ms >= state.time_for_pick_ms ) {
 			state.status = "picking";
 			play_audio( "review_end" );
+			return;
 		}
 
 		if( state.status == "picking" ) {
@@ -98,25 +131,29 @@
 		}
 		
 		
-		if( state.status == "picking" && state.time_elapsed_ms >= state.time_for_pick_ms ) {
-			state.current_card++;
-			state.time_for_pick_ms = 1000 * lerp( state.first_time, state.last_time, state.current_card / CONSTANTS["cards_per_booster"] );
-			state.time_elapsed_ms = 0;
-			state.time_start_ms = Date.now();
-			log("Pick Card " + state.current_card );
-			play_audio( "draft" );
-		}
-		
 		if( state.current_card == CONSTANTS["cards_per_booster"] && state.current_booster <= state.num_boosters-1 ) {
 			state.current_booster++;
 			state.current_card = 0;
 			state.time_elapsed_ms = 0;
 			state.time_start_ms = Date.now();
 			state.time_for_pick_ms = 1000 * state.review_time;
+			log("Pick Last Card " + state.current_card );
+			play_audio( "draft" );
 			log("Review " + state.review_time + "sec, then open booster " + (1+state.current_booster) );
 			state.status = "reviewing";
 			play_audio( "review_start" );
+			return;
 		}
+
+		if( state.status == "picking" && state.time_elapsed_ms >= state.time_for_pick_ms ) {
+			state.current_card++;
+			state.time_for_pick_ms = 1000 * lerp( state.first_time, state.last_time, state.current_card / CONSTANTS["cards_per_booster"] );
+			state.time_elapsed_ms = 0;
+			state.time_start_ms = Date.now();
+			log("Pick Card " + state.current_card );
+			play_audio( "draft_and_pass" );
+		}
+		
 		
 		if( state.current_booster == state.num_boosters ) {
 			state.status = "done";
