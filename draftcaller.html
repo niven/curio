@@ -5,10 +5,11 @@
 
 	var CONSTANTS = {
 		"cards_per_booster": 2,
-		"num_boosters": 6,
-		"first_time": 15,
-		"last_time": 5,
-		"review_time": 20
+		"num_boosters": 3,
+		"first_time": 3,
+		"last_time": 2,
+		"review_time": 5,
+		"deckbuilding_time": 10
 	}
 
 	function initialize() {
@@ -33,7 +34,9 @@
 		"review_start": "review_start.wav",
 		"review_end": "review_end.wav",
 		"pause": "pause.wav",
-		"resume": "resume.wav"
+		"resume": "resume.wav",
+		"start_deckbuilding": "start_deckbuilding.wav",
+		"stop_deckbuilding": "stop_deckbuilding.wav"
 	};
 	
 	function load_audio( audio_dict, audio_base_path, files ) {
@@ -90,7 +93,8 @@
 		"first_time": -1,
 		"last_time": -1,
 		"review_time": -1,
-		"time_elapsed": 0
+		"time_elapsed": 0,
+		"deckbuilding_time": -1
 	};
 
 	var main_loop_interval_id = -1;
@@ -134,10 +138,10 @@
 		
 		ux_feedback();
 
-		// done is done!
-		if( state.current_booster == state.num_boosters ) {
+		if( state.status == "deckbuilding" && state.time_elapsed_ms >= state.time_limit_ms ) {
+			log("Stop building your deck");
+			play_audio( "stop_deckbuilding" );
 			state.status = "done";
-			document.getElementById("bd").setAttribute("class", state.status);
 			return;
 		}
 
@@ -155,14 +159,25 @@
 			reset_time();
 
 			// check for last card in booster
-			if( state.current_card == CONSTANTS["cards_per_booster"]-1 && state.current_booster <= state.num_boosters-1 ) {
-				state.current_booster++;
-				state.current_card = 0;
-				state.time_limit_ms = 1000 * state.review_time;
+			if( state.current_card == CONSTANTS["cards_per_booster"]-1 ) {
+
 				play_audio( "draft" );
-				log("Review " + state.review_time + "sec, then open booster " + (1+state.current_booster) );
-				state.status = "reviewing";
-				play_audio( "review_start" );
+
+				// last booster, go to deckbuilding
+				if( state.current_booster == state.num_boosters-1 ) {
+					state.time_limit_ms = 1000 * state.deckbuilding_time;
+					state.status = "deckbuilding";
+					log("Start building your deck");
+					play_audio( "start_deckbuilding" );
+				} else { // go to reviewing
+					state.current_booster++;
+					state.current_card = 0;
+					state.time_limit_ms = 1000 * state.review_time;
+					log("Review " + state.review_time + " seconds, then open booster " + (1+state.current_booster) );
+					state.status = "reviewing";
+					play_audio( "review_start" );		
+				}
+				
 			} else { // normal pick
 				state.current_card++;
 				state.time_limit_ms = 1000 * lerp( state.first_time, state.last_time, state.current_card / CONSTANTS["cards_per_booster"] );
@@ -173,15 +188,19 @@
 
 	}
 
+	function update_time() {
+		var now = Date.now();
+		state.time_elapsed_ms += now - state.time_start_ms;
+		state.time_start_ms = now;
+	}
+
 	function twiddle() {
 
 		switch( state.status ) {
+			case "deckbuilding":
 			case "reviewing":
 			case "picking": {
-				// update the timer
-				var now = Date.now();
-				state.time_elapsed_ms += now - state.time_start_ms;
-				state.time_start_ms = now;
+				update_time();
 
 				var time_sec = Math.ceil( (state.time_limit_ms - state.time_elapsed_ms) / 1000 );
 				set_timer( time_sec );
@@ -302,7 +321,7 @@
 			background-color: cornflowerblue;
 			color: black;
 		}
-		.done {
+		.deckbuilding {
 			background-color: forestgreen;
 			color: black;
 		}
@@ -324,10 +343,11 @@
 <body onload="initialize();" id="bd">
 	
 	<div id="setup">
-		Boosters: <input type="text" id="num_boosters" value="3"></input> 
-		First card time: <input type="text" id="first_time" value="12"></input>
-		Last Card Time: <input type="text" id="last_time" value="5"></input>
-		Review Time: <input type="text" id="review_time" value="10"></input>
+		Boosters: <input type="text" id="num_boosters"></input> 
+		First card time: <input type="text" id="first_time"></input>
+		Last Card Time: <input type="text" id="last_time"></input>
+		Review Time: <input type="text" id="review_time"></input>
+		Deckbuilding Time: <input type="text" id="deckbuilding_time"></input>
 	<br>
 	<button onclick="start();">Start</button>
 
