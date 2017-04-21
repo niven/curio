@@ -1,0 +1,123 @@
+<html>
+<meta charset="utf8">
+
+<head>
+	<script type="text/javascript">
+		
+		var width = 300;
+		var height = 200;
+		var colors = ["forestgreen", "orange", "deeppink", "gold", "azure", "salmon", "sandybrown", "seagreen", "orchid", "aliceblue"];
+		
+		function init() {
+			var stage = document.getElementById("stage");
+			stage.setAttribute( "width", width );
+			stage.setAttribute( "height", height );
+			stage.style.backgroundColor = "cornflowerblue";
+		}
+		
+		function render() {
+			
+			var input = document.getElementById("values").value.split("\n").filter( function( el, idx, arr ) {
+				return el.length > 0  && el.trim().length > 0 ? true : false;
+			});
+			
+			var values = input.map( function( el, id, arr ) {
+				return parseInt( el );
+			});
+			var descriptions = input.map( function( el, id, arr ) {
+				return el.split(",")[1];
+			});
+
+			// Rendering a staircase tree map
+			
+			// For every item, make a rectangle that takes up space according to the percentage of the total it is
+			//		(and flip the rotation between horizontal and vertical every time)
+			var w = width;
+			var h = height;
+			var x = y = 0; // start place for drawing within the overall SVG rect (the grid has (0,0) in left top)
+			var orientation = "horizontal";
+			while( values.length > 0 ) {
+				
+				// draw_point( x, y ); // debug
+				
+				// normalize all number so they add up to 100 and get the percentage this current item represents
+				var sum = values.reduce( function( acc, val, idx, arr ) {
+					return acc + val;	
+				}, 0);
+				var percentage = values.shift() / sum;
+				
+				var width_to_use = height_to_use = 0;
+				var pos_x = x;
+				var pos_y = y;
+				
+				// if the orientation is horizontal, then we take the left over rectangle,
+				// and take up space equal to the percentage of this item of the total
+				if( orientation == "horizontal" ) {
+					width_to_use = (width-x) * percentage;
+					height_to_use = h;
+					x += width_to_use; // make sure the next draw knows where to start from
+				} else {
+					// orientation is vertical, so we take the top of the rectangle,
+					// and take up space downwards equal to the percentage again
+					height_to_use = (height-y) * percentage;
+					width_to_use = w;
+					y += height_to_use; // make sure the next draw knows where to start from					
+				}
+				
+				draw_rect( pos_x, pos_y, width_to_use, height_to_use, colors[values.length], descriptions.shift() );
+				
+				orientation = orientation == "horizontal" ? "vertical" : "horizontal";
+			}
+			
+			
+		}
+		
+		// for debug
+		function draw_point( x, y ) {
+			var stage = document.getElementById("stage");
+			var circ = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+			circ.setAttribute( "cx", x );
+			circ.setAttribute( "cy", y );
+			circ.setAttribute( "r", 10 );
+			circ.setAttribute( "fill", "black" );
+			stage.appendChild( circ );
+		}
+		
+		function draw_rect( x, y, width, height, color, description ) {
+			var stage = document.getElementById("stage");
+			var rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+			rect.setAttribute( "x", x );
+			rect.setAttribute( "y", y );
+			rect.setAttribute( "width", width );
+			rect.setAttribute( "height", height );
+			rect.setAttribute( "fill",color );
+			// rect.setAttribute( "opacity", 0.5 ); // handy for debug
+			rect.onclick = function( el ) {
+				// console.log(description);
+				document.getElementById("log").textContent = description;
+			}
+			stage.appendChild( rect );
+		}
+		
+	</script>
+	
+</head>
+
+<body onload="init(); ">
+	Put your data here, 1 per line like "25, description"<br>
+	<textarea id="values" rows="10" cols="20">40, Beers
+12, Shots
+4, Wine
+	</textarea><br>
+	Then click: <button onclick="render()">Render</button><br>
+	<span id="log">Then click on a block to see it's description</span><br>
+	<svg version="1.1"
+	     baseProfile="full"
+	     xmlns="http://www.w3.org/2000/svg"
+		  id="stage"
+		  />
+	
+	
+</body>
+
+</html>
